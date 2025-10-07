@@ -1,0 +1,90 @@
+# DAMA-BAX Configuration Example
+# Copy this file to config.yaml and modify as needed
+
+# Resource paths
+resources:
+  base_dir: "./resources"
+  matlab_data: "${resources.base_dir}/matlab_data"
+  setup: "${resources.base_dir}/setup"
+  rings: "${resources.base_dir}/rings"
+  pretrained_models: "${resources.base_dir}/models/run_0"
+  initial_data: "${resources.base_dir}/data/run_0"
+
+# Run configuration
+run:
+  name: "run_3"  # Identifier for this optimization run
+  data_root: "./data/${run.name}/"
+  model_root: "./models/${run.name}/"
+  log_filename: "bax_log_${run.name}.pkl"
+  max_iterations: 3200  # Maximum number of BAX loops
+  n_sampling: 50  # Number of points sampled per iteration
+
+# Problem parameters
+problem:
+  da:
+    threshold: 0.75  # DA threshold (survival fraction defining boundary)
+    method: 1  # Calculation method: 0=Daniel's, 1=Xiaobiao's
+  ma:
+    threshold: 0.94  # MA threshold
+    method: 2  # Calculation method: 0=Daniel's, 1=Xiaobiao's, 2=Xiaobiao's (GT match)
+
+# Genetic algorithm parameters
+ga:
+  population_size: 200  # NSGA2 population size
+  n_generations: 20  # Number of generations
+  selection_size: 100  # Number of solutions selected after optimization
+
+# Acquisition strategy
+acquisition:
+  method: 2  # 0=around boundary, 1=at boundary, 2=within survival range
+  da_range:  # For method=2: survival turn range for DA
+    lower_bound: 0.4
+    upper_bound: 0.75
+  ma_range:  # For method=2: survival turn range for MA
+    lower_bound: 0.85
+    upper_bound: 0.95
+
+# Neural network training parameters
+training:
+  # Initial training (on pretrained models)
+  initial:
+    epochs: 150
+    learning_rate: 0.0001
+    batch_size: 1000
+    dropout: 0.1
+    n_neurons: 800
+    early_stopping_patience: 10
+
+  # Iterative training (during BAX loop)
+  iterative:
+    epochs: 10
+    learning_rate: 0.0001
+    batch_size: 1000
+    weight_new_points: 10  # Weight multiplier for newly acquired points
+
+  # Training settings
+  test_ratio: 0.05
+  random_state: 1
+
+# Computation settings
+compute:
+  device: "auto"  # "auto", "cuda", "cpu"
+  max_inference_points: 100000  # Maximum points per inference batch
+  simulation_buffer_size: 200  # Buffer size for simulation data saving
+  num_workers: 1  # DataLoader workers
+
+# Tracking simulation parameters
+simulation:
+  n_turns: 1024  # Number of tracking turns (512 * 2)
+  seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # Random seeds for stochastic simulations
+
+# Checkpointing
+checkpointing:
+  enabled: true
+  save_snapshots: true  # Save model at every iteration (vs. only best)
+  save_final: true  # Save final model state
+
+# Logging
+logging:
+  verbose: 1  # 0=quiet, 1=normal, 2=debug
+  log_period: 10  # Print every N batches during training
