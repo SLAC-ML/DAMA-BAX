@@ -593,18 +593,18 @@ def fn_factory(model, norm):
 
 
 class BAXOpt:
-    
-    def __init__(self, algo, fn_oracle, norm, init, device=None, snapshot=False, model_root='models'):
+
+    def __init__(self, algo, fn_oracle, norm, init, device=None, snapshot=False, model_root='models', model_names=None):
         self.acquired_data = []
         self.model = []
         self.n_sampling = 200
         self.iter_idx = 0
-        
+
         self.algo = algo
         self.fn_oracle = fn_oracle
         self.norm = norm
         self.init = init
-        
+
         # Set device
         if device is None:
             if torch.cuda.is_available():
@@ -612,19 +612,27 @@ class BAXOpt:
             else:
                 device = torch.device("cpu")
         self.device = device
-        
+
         # If store all model weights in each loop
         # usually this is for dev/debug
         self.snapshot = snapshot
         self.model_root = model_root
-        
+
+        # Model naming (default: net0, net1, ...)
+        n_obj = len(fn_oracle)
+        if model_names is None:
+            model_names = [f'net{i}' for i in range(n_obj)]
+        elif len(model_names) != n_obj:
+            raise ValueError(f"model_names must have length {n_obj} (number of objectives), got {len(model_names)}")
+        self.model_names = model_names
+
         # Dataset params
         self.random_state = 1
         self.test_ratio = 0.05
         self.batch_size = 1000
         self.batch_size_test = self.batch_size
         self.weight_new_pts = 10
-        
+
         # NN params
         self.n_feat = 6
         self.epochs = 150
@@ -635,8 +643,8 @@ class BAXOpt:
         self.lr = 1e-4
         self.out_scale = 1
         self.savefile = [
-            os.path.join(model_root, 'danet.pt'),
-            os.path.join(model_root, 'manet.pt'),
+            os.path.join(model_root, f'{name}.pt')
+            for name in model_names
         ]
 
     def update_acq_data(self, X, Y=None):
@@ -732,9 +740,9 @@ class BAXOpt:
         # Train the model
         for i in range(n_obj):
             if self.snapshot:  # save the model weights for every loop
-                weight_name = f'manet_l{self.iter_idx}.pt' if i else f'danet_l{self.iter_idx}.pt'
+                weight_name = f'{self.model_names[i]}_l{self.iter_idx}.pt'
                 savefile = os.path.join(self.model_root, weight_name)
-                weight_name_f = f'manet_l{self.iter_idx}_f.pt' if i else f'danet_l{self.iter_idx}_f.pt'
+                weight_name_f = f'{self.model_names[i]}_l{self.iter_idx}_f.pt'
                 final_savefile = os.path.join(self.model_root, weight_name_f)
             else:
                 savefile = self.savefile[i]
@@ -818,12 +826,29 @@ class BAXOpt:
             self.iter_idx += 1
 
 
-def get_curr_loop_num(model_root):
+def get_curr_loop_num(model_root, model_name='net1'):
+    """
+    Find the highest loop number from saved model checkpoints.
+
+    Parameters:
+    -----------
+    model_root : str
+        Directory containing model checkpoints
+    model_name : str, optional
+        Name of the model to search for (default: 'net1', the second objective)
+        Looks for files matching pattern: {model_name}_l{N}_f.pt
+
+    Returns:
+    --------
+    int or None
+        Highest loop number found, or None if no checkpoints exist
+    """
     if not os.path.isdir(model_root):
         return None  # Or raise an exception if preferred
 
     max_l = None
-    pattern = re.compile(r"manet_l(\d+)_f\.pt")
+    # Pattern: {model_name}_l{N}_f.pt (e.g., net1_l5_f.pt, manet_l5_f.pt)
+    pattern = re.compile(rf"{re.escape(model_name)}_l(\d+)_f\.pt")
 
     for fname in os.listdir(model_root):
         match = pattern.match(fname)
