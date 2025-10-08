@@ -265,6 +265,146 @@ Each configuration is evaluated with random seeds 1-10, providing:
 
 ---
 
+## Understanding X → X0/X1 Expansion in DAMA
+
+### The Core Pattern
+
+DAMA demonstrates the **full expansion pattern** that BAX supports:
+
+```
+Base configs: X (n, 4) - the 4 sextupole parameters we optimize
+    ↓
+Expand for DA: X0 (n×100, 6) - [s1, s2, s3, s4, x, y]
+Expand for MA: X1 (n×50, 6) - [s1, s2, s3, s4, s_pos, momentum]
+    ↓
+Oracles evaluate: Y0 (n×100, 1), Y1 (n×50, 1) - survival turns
+    ↓
+Neural networks learn: X0→Y0 and X1→Y1
+    ↓
+Objectives aggregate: Y0→DA_area, Y1→MA_area
+```
+
+### Step-by-Step Example
+
+#### 1. Base Configuration
+
+You start with n base configurations (4D sextupole settings):
+
+```python
+X_base = np.array([[0.2, 0.5, 0.3, 0.8],    # Config 1
+                   [0.1, 0.6, 0.4, 0.7]])   # Config 2
+# Shape: (2, 4)
+```
+
+#### 2. Expansion for DA
+
+`gen_X_data()` expands each base config to a 100-point (x,y) spatial grid:
+
+```python
+from da_virtual_opt import VirtualDAMA
+problem = VirtualDAMA(...)
+
+XX_DA, _ = problem.gen_X_data(X_base, exact=True)
+# XX_DA shape: (2, 100, 2) - 100 (x,y) points per config
+
+# Convert to train shape for neural network
+X0 = dass.X_to_train_shape(XX_DA)
+# X0 shape: (200, 6) - flattened [s1, s2, s3, s4, x, y]
+```
+
+**What happened:**
+- Config 1 → 100 points: (0.2, 0.5, 0.3, 0.8, x₁, y₁), ..., (0.2, 0.5, 0.3, 0.8, x₁₀₀, y₁₀₀)
+- Config 2 → 100 points: (0.1, 0.6, 0.4, 0.7, x₁, y₁), ..., (0.1, 0.6, 0.4, 0.7, x₁₀₀, y₁₀₀)
+- Total: 200 evaluation points
+
+#### 3. Expansion for MA
+
+Different expansion for MA (s_position × momentum grid):
+
+```python
+_, XX_MA = problem.gen_X_data(X_base)
+# XX_MA shape: (2, 50, 2) - 50 (s_pos, momentum) points per config
+
+X1 = dass.X_to_train_shape(XX_MA)
+# X1 shape: (100, 6) - flattened [s1, s2, s3, s4, s_idx, momentum]
+```
+
+**Key insight:** Different grids for different objectives!
+
+#### 4. Oracle Evaluation
+
+Oracles receive **expanded** inputs:
+
+```python
+Y0 = oracle_DA(X0)  # (200, 1) - survival turns for all DA points
+Y1 = oracle_MA(X1)  # (100, 1) - survival turns for all MA points
+```
+
+#### 5. Neural Network Training
+
+Two separate networks learn the mappings:
+
+```python
+NN_DA learns:  X0 (200, 6) → Y0 (200, 1)
+NN_MA learns:  X1 (100, 6) → Y1 (100, 1)
+```
+
+#### 6. Objective Calculation
+
+Objectives use the pattern: **expand → predict → aggregate**
+
+```python
+def objective_DA(x_base, fn_model):  # x_base: (n, 4)
+    # 1. Expand to DA grid
+    XX_DA, _ = problem.gen_X_data(x_base, exact=True)
+    X0 = dass.X_to_train_shape(XX_DA)  # (n×100, 6)
+
+    # 2. Predict with surrogate
+    Y0_pred = fn_model(X0)  # (n×100, 1)
+
+    # 3. Aggregate to DA objective
+    da_area = calculate_aperture_area(Y0_pred)  # (n, 1)
+
+    return da_area
+```
+
+### Why This Design?
+
+**1. Physics-based**: Apertures are inherently spatial/momentum concepts
+- DA measures stable region in (x, y) phase space
+- MA measures stable region in momentum
+
+**2. Efficiency**: Don't need to evaluate every possible (x,y,s,p) combination
+- DA grid: 100 (x,y) points carefully chosen
+- MA grid: 50 (s_pos, momentum) points
+
+**3. Flexibility**: Each objective gets its own evaluation strategy
+- DA: Radial sampling in spatial coordinates
+- MA: Grid in longitudinal position × momentum offset
+
+### Data Shapes Throughout BAX Loop
+
+| Stage | DA (Obj 1) | MA (Obj 2) |
+|-------|------------|------------|
+| **Base configs** | (n, 4) | (n, 4) |
+| **Expanded** | (n×100, 6) | (n×50, 6) |
+| **Oracle output** | (n×100, 1) | (n×50, 1) |
+| **NN training** | X0→Y0 | X1→Y1 |
+| **Objective** | (n, 1) | (n, 1) |
+
+### Code References
+
+**Expansion:**
+- `examples/dama/da_virtual_opt.py:gen_X_data()` - line 133+
+
+**Train shape conversion:**
+- `examples/dama/da_ssrl.py:X_to_train_shape()` - line 67+
+
+**Objective with expansion:**
+- `examples/dama/dama_objectives.py:make_DA_objective()` - line 19+
+
+---
+
 ## Implementation Details
 
 ### Oracle Functions (`dama_oracles.py`)

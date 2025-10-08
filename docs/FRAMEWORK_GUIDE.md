@@ -31,14 +31,13 @@ BAX is a framework for **multi-objective optimization when simulations are expen
 ### When to Use BAX
 
 ✅ **Use BAX when:**
-- You have 2 competing objectives to optimize
+- You have competing objectives to optimize (single or multiple)
 - Your simulations are expensive (minutes to hours each)
 - You want to find the Pareto front efficiently
 - You can provide ~100-1000 initial samples for training
 
 ❌ **Don't use BAX when:**
 - Simulations are cheap (use traditional MOO algorithms)
-- You have >2 objectives (BAX is designed for 2)
 - You can't provide initial training data
 
 ### What You Need to Provide
@@ -194,6 +193,147 @@ def make_algo():
 - Implements your acquisition strategy
 - Should leverage surrogates to evaluate many candidates
 - Can use any method: GA, Bayesian optimization, random sampling, etc.
+
+---
+
+## Understanding Input Expansion (X → X0/X1)
+
+### The Key Pattern
+
+**IMPORTANT**: In most real applications, oracles and objectives work with **different input dimensions**:
+
+- **Base configurations (X)**: What you're optimizing (e.g., n, 4)
+- **Expanded inputs (X0, X1)**: What oracles actually evaluate (e.g., n×100, 6)
+
+**Example flow:**
+```
+Base config X (n, 4)
+    ↓ (expand for obj1)
+X0 (n×100, 6) → Oracle1 → Y0 (n×100, 1) → NN learns X0→Y0
+    ↓ (objective uses NN)
+X (n, 4) → expand → X0 (n×100, 6) → NN predicts → Y0_pred → aggregate → obj1 (n, 1)
+```
+
+### Two Patterns
+
+#### Pattern A: No Expansion (Simple)
+
+Oracle and objective use the same input:
+
+```python
+def oracle_obj1(X):  # X: (n, 2)
+    return sphere_function(X)  # (n, 1)
+
+def objective_obj1(x, fn_model):  # x: (n, 2)
+    return fn_model(x)  # Direct prediction, no expansion
+```
+
+**Use when:** Simulation evaluates configurations directly.
+
+**Example:** `examples/synthetic_simple/run_simple.py`
+
+#### Pattern B: With Expansion (Like DAMA)
+
+Oracle receives expanded input, objective handles expansion:
+
+```python
+# Expansion function
+def expand_for_obj1(x):  # x: (n, 2) base
+    """Expand to evaluation grid."""
+    n = x.shape[0]
+    grid = np.linspace(0, 1, 10)  # 10 grid points
+    x_repeated = np.repeat(x, 10, axis=0)  # (n×10, 2)
+    grid_tiled = np.tile(grid, n).reshape(-1, 1)  # (n×10, 1)
+    return np.hstack([x_repeated, grid_tiled])  # (n×10, 3)
+
+# Oracle expects EXPANDED input
+def oracle_obj1(X0):  # X0: (n×10, 3) - already expanded!
+    """Evaluate at each grid point."""
+    x1, x2, grid_val = X0[:, 0], X0[:, 1], X0[:, 2]
+    return sphere_function(x1, x2, grid_val)  # (n×10, 1)
+
+# Objective expands, predicts, aggregates
+def objective_obj1(x, fn_model):  # x: (n, 2) base
+    """Complete flow: expand → predict → aggregate."""
+    # 1. Expand
+    X0 = expand_for_obj1(x)  # (n×10, 3)
+
+    # 2. Predict with surrogate
+    Y0_pred = fn_model(X0)  # (n×10, 1)
+
+    # 3. Aggregate to objective
+    Y0_reshaped = Y0_pred.T.reshape(n, 10)
+    obj = Y0_reshaped.mean(axis=1, keepdims=True)  # (n, 1)
+    return obj
+```
+
+**Use when:** Simulation evaluates on grids/ensembles (particles, angles, radii, etc.).
+
+**Example:** `examples/synthetic/run_synthetic.py`, `examples/dama/`
+
+### Why Different Expansions for Each Objective?
+
+Each objective may need different evaluation strategies:
+
+```python
+# Objective 1: Radial grid (10 points)
+X0 = expand_radial(X)  # (n×10, 3): [x, y, radius]
+Y0 = oracle_obj1(X0)   # Evaluate at different radii
+NN0 learns: X0 → Y0
+
+# Objective 2: Angular grid (8 points)
+X1 = expand_angular(X)  # (n×8, 3): [x, y, angle]
+Y1 = oracle_obj2(X1)    # Evaluate at different angles
+NN1 learns: X1 → Y1
+```
+
+This is exactly what DAMA does:
+- **DA**: Expands to (x, y) spatial grid
+- **MA**: Expands to (s_position, momentum) grid
+
+### Critical Implementation Details
+
+**1. Init data must be expanded:**
+```python
+X_init_base = np.random.rand(100, 2)  # Base configs
+
+# Expand for each objective
+X0_init = expand_for_obj1(X_init_base)  # (1000, 3)
+X1_init = expand_for_obj2(X_init_base)  # (800, 3)
+
+# Oracles receive expanded
+Y0_init = oracle_obj1(X0_init)
+Y1_init = oracle_obj2(X1_init)
+
+# Init functions return expanded data
+def init_obj1():
+    return X0_init, Y0_init.flatten()
+```
+
+**2. Normalization is on expanded space:**
+```python
+X0_mu, X0_std = dann.get_norm(X0_init)  # Based on expanded dims
+norm0 = lambda X: dann.normalize(X.copy(), X0_mu, X0_std)
+```
+
+**3. Algorithm returns expanded inputs:**
+```python
+def algo(fn_model_list):
+    # Generate base candidates
+    X_candidates_base = np.random.rand(100, 2)
+
+    # Expand before returning
+    X0_selected = expand_for_obj1(X_candidates_base)
+    X1_selected = expand_for_obj2(X_candidates_base)
+
+    return X0_selected, X1_selected  # Return EXPANDED!
+```
+
+**4. Set n_feat to expanded dimensionality:**
+```python
+opt = BAXOpt(...)
+opt.n_feat = 3  # Expanded dims, not base dims!
+```
 
 ---
 
@@ -514,9 +654,12 @@ See `examples/dama/` for a full example following this structure.
 
 | Aspect | DAMA Example | Your Problem |
 |--------|--------------|--------------|
+| **Base configs** | (n, 4) sextupole settings | Your config space |
+| **Expansion DA** | (n×100, 6): [s1...s4, x, y] | Your grid/ensemble |
+| **Expansion MA** | (n×50, 6): [s1...s4, s_pos, momentum] | Your grid/ensemble |
 | **Oracles** | PyAT particle tracking | Your simulations |
-| **Oracle output** | Survival turns (particles) | Your measurements |
-| **Objective calc** | Aperture area calculation | Your metric |
+| **Oracle output** | Survival turns (per particle) | Your measurements |
+| **Objective calc** | Aperture area from survival | Your aggregation |
 | **Acquisition** | NSGA2 + boundary sampling | Your strategy |
 | **Extra params** | Random seeds (1-10) | Whatever you need |
 
@@ -527,6 +670,7 @@ See `examples/dama/` for a full example following this structure.
 - ✅ Iterative optimization loop (automatic)
 
 **You provide:**
+- ✅ Expansion functions (if needed)
 - ✅ Your expensive simulations (oracles)
 - ✅ How to calculate objectives (objective functions)
 - ✅ How to pick next points (algorithm)

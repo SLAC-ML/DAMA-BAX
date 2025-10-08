@@ -4,13 +4,54 @@ This directory contains examples demonstrating how to use the BAX (Bayesian Algo
 
 ## Overview
 
-The BAX framework requires you to provide **5 simple functions** for a 2-objective optimization problem:
+The BAX framework requires you to provide **5 simple functions per objective** for multi-objective optimization:
 
 1. **Oracle function for objective 1** - Runs expensive simulation
 2. **Oracle function for objective 2** - Runs expensive simulation
 3. **Objective function for objective 1** - Converts model predictions → objective value
 4. **Objective function for objective 2** - Converts model predictions → objective value
 5. **Algorithm function** - Selects next candidates to evaluate
+
+**Note**: While examples show 2 objectives, BAX supports any number of objectives - just provide the corresponding oracle and objective functions for each.
+
+## Two Implementation Patterns
+
+BAX supports two patterns depending on your problem:
+
+### Pattern A: Direct Evaluation (No Expansion)
+
+Oracle and objective work with the **same input space**:
+
+```python
+X (n, dims) → Oracle → Y (n, 1) → NN learns X→Y
+X (n, dims) → Objective → NN predicts → obj (n, 1)
+```
+
+**When to use**: Simulation evaluates configurations directly.
+
+**Example**: `synthetic_simple/` - Sphere and Rosenbrock functions
+
+### Pattern B: Grid/Ensemble Evaluation (With Expansion)
+
+Oracle receives **expanded** input (e.g., grid points), objective handles expansion:
+
+```python
+X_base (n, base_dims)
+    → expand → X0 (n×grid, expanded_dims)
+    → Oracle → Y0 (n×grid, 1)
+    → NN learns X0→Y0
+
+X_base (n, base_dims)
+    → Objective: expand → X0 → NN predicts → aggregate → obj (n, 1)
+```
+
+**When to use**: Simulation evaluates on grids, ensembles, or multiple conditions per config.
+
+**Examples**:
+- `synthetic/` - Radial/angular grids
+- `dama/` - Spatial (x,y) and momentum grids
+
+**Key difference**: In Pattern B, X0 ≠ X (different dimensions!)
 
 ## Quick Start
 
