@@ -6,8 +6,8 @@ This guide explains how to use the BAX (Bayesian Algorithm Execution) framework 
 
 1. [Overview](#overview)
 2. [Quick Start](#quick-start)
-3. [The 5 Required Functions](#the-5-required-functions)
-4. [Detailed Function Signatures](#detailed-function-signatures)
+3. [Simplified API (NEW!)](#simplified-api-new)
+4. [Manual API](#manual-api)
 5. [Common Patterns](#common-patterns)
 6. [Configuration Options](#configuration-options)
 7. [Examples](#examples)
@@ -42,13 +42,13 @@ BAX is a framework for **multi-objective optimization when simulations are expen
 
 ### What You Need to Provide
 
-The framework requires **5 simple functions** (no classes!):
+**Simplified API (Recommended):**
+- **3 functions**: oracles, objectives, algorithm
+- Automatic initialization, normalization, and configuration
 
-1. **Oracle function for objective 1** - Runs expensive simulation
-2. **Oracle function for objective 2** - Runs expensive simulation
-3. **Objective calculator for objective 1** - Converts predictions → objective value
-4. **Objective calculator for objective 2** - Converts predictions → objective value
-5. **Algorithm function** - Implements acquisition strategy
+**Manual API (Advanced):**
+- **5 functions**: oracles, objectives, algorithm, normalization, initialization
+- Full control over all aspects
 
 ---
 
@@ -130,7 +130,92 @@ opt.run_acquisition(max_iterations=100)
 
 ---
 
-## The 5 Required Functions
+## Simplified API (NEW!)
+
+The easiest way to use BAX is with `run_bax_optimization()` - just provide 3 functions and it handles the rest!
+
+### Basic Usage
+
+```python
+from bax_core import run_bax_optimization
+
+# Step 1: Define oracle functions
+def oracle_obj1(X):
+    return your_expensive_simulation_1(X)
+
+def oracle_obj2(X):
+    return your_expensive_simulation_2(X)
+
+# Step 2: Define objective functions
+def objective_obj1(x, fn_model):
+    predictions = fn_model(x)
+    return calculate_objective(predictions.T)
+
+def objective_obj2(x, fn_model):
+    predictions = fn_model(x)
+    return calculate_other_objective(predictions.T)
+
+# Step 3: Define algorithm function
+def make_algo():
+    def algo(fn_model_list):
+        candidates = your_optimization(fn_model_list)
+        return candidates_obj1, candidates_obj2
+    return algo
+
+# Run! Automatic initialization, normalization, configuration
+opt, results = run_bax_optimization(
+    oracles=[oracle_obj1, oracle_obj2],
+    objectives=[objective_obj1, objective_obj2],
+    algorithm=make_algo(),
+    n_init=100,           # Automatic LHS sampling
+    max_iterations=100
+)
+```
+
+### What Gets Automated
+
+- **Initial data generation**: Latin Hypercube Sampling in [0,1] (or custom bounds)
+- **Normalization**: Automatic mean/std normalization per objective
+- **Init functions**: Auto-created from initial data
+- **NN configuration**: Sensible defaults (800 neurons, lr=1e-4, etc.)
+- **Model naming**: `net0`, `net1`, ... (or custom names)
+
+### Advanced Options
+
+```python
+opt, results = run_bax_optimization(
+    oracles=[oracle_obj1, oracle_obj2],
+    objectives=[objective_obj1, objective_obj2],
+    algorithm=algo,
+
+    # Custom bounds
+    bounds=[(0, 10), (-5, 5)],
+
+    # Pattern B: Grid expansion
+    expansion_funcs=[expand_obj1, expand_obj2],
+
+    # Custom NN config
+    nn_config={'n_neur': 1000, 'lr': 1e-3, 'epochs': 200},
+
+    # Custom initialization
+    init_sampler=my_custom_sampler,
+
+    # Other
+    model_names=['model1', 'model2'],
+    device='cuda',
+    snapshot=True
+)
+```
+
+**See:** `examples/synthetic_simple/run_simple_api.py` for complete example
+
+---
+
+## Manual API
+
+For advanced users who need full control over initialization and configuration.
+
+### The 5 Required Functions
 
 ### 1-2. Oracle Functions (Expensive Simulations)
 

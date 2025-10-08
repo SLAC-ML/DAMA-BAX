@@ -8,12 +8,14 @@ BAX is a framework that uses neural network surrogate models and Bayesian optimi
 
 ## Features
 
-- **Multi-objective optimization** using NSGA2 genetic algorithm
+- **Multi-objective optimization** supporting any number of objectives
 - **Neural network surrogates** (PyTorch) to replace expensive simulations
 - **Bayesian acquisition strategy** for efficient sampling
 - **Automatic checkpointing** and resume capability
-- **Simple API**: Just 5 functions to implement your problem
+- **Simplified API**: Just 3 functions + automatic initialization (NEW!)
+- **Manual API**: Full control with 5-function interface
 - **Parallel simulation** support via ProcessPoolExecutor
+- **Flexible patterns**: Direct evaluation OR grid/ensemble expansion
 
 ---
 
@@ -54,9 +56,62 @@ This checks Python version, dependencies, core modules, and compute devices.
 
 ## Quick Start
 
-### The 5-Function API
+### Simplified API (Recommended for New Users)
 
-BAX requires you to provide 5 simple functions (no classes!):
+Just provide 3 functions and BAX handles the rest:
+
+```python
+import sys
+sys.path.insert(0, 'core')
+from bax_core import run_bax_optimization
+
+# 1. Oracle functions (your expensive simulations)
+def oracle_obj1(X):
+    return your_expensive_simulation_1(X)
+
+def oracle_obj2(X):
+    return your_expensive_simulation_2(X)
+
+# 2. Objective functions (transform predictions → objectives)
+def objective_obj1(x, fn_model):
+    predictions = fn_model(x)
+    return calculate_objective(predictions)
+
+def objective_obj2(x, fn_model):
+    predictions = fn_model(x)
+    return calculate_objective(predictions)
+
+# 3. Algorithm function (acquisition strategy)
+def make_algo():
+    def algo(fn_model_list):
+        # Your acquisition strategy here
+        candidates = your_optimization_method(fn_model_list)
+        return candidates_obj1, candidates_obj2
+    return algo
+
+# Run optimization - automatic initialization!
+opt, results = run_bax_optimization(
+    oracles=[oracle_obj1, oracle_obj2],
+    objectives=[objective_obj1, objective_obj2],
+    algorithm=make_algo(),
+    n_init=100,           # Automatic LHS sampling
+    max_iterations=100
+)
+```
+
+**Features:**
+- Automatic initial data generation (Latin Hypercube Sampling)
+- Automatic normalization setup
+- Automatic neural network configuration
+- Custom bounds and initialization supported
+
+See `examples/synthetic_simple/run_simple_api.py` for a complete working example.
+
+---
+
+### Manual API (For Advanced Customization)
+
+For full control, use the 5-function interface:
 
 ```python
 import sys

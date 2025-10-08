@@ -2,17 +2,43 @@
 
 This directory contains examples demonstrating how to use the BAX (Bayesian Algorithm Execution) framework for multi-objective optimization.
 
+## Quick Start - Simplified API (New!)
+
+The easiest way to use BAX is with the `run_bax_optimization()` function:
+
+```python
+from bax_core import run_bax_optimization
+
+opt, results = run_bax_optimization(
+    oracles=[oracle_obj1, oracle_obj2],      # Your simulation functions
+    objectives=[objective_obj1, objective_obj2],  # Transform predictions → objectives
+    algorithm=algo,                           # Acquisition strategy
+    n_init=50,                               # Initial samples (automatic LHS)
+    max_iterations=100                        # BAX iterations
+)
+```
+
+**That's it!** The function automatically handles:
+- Initial data generation (Latin Hypercube Sampling)
+- Normalization setup
+- Neural network configuration
+- Model training and optimization loop
+
+See `synthetic_simple/run_simple_api.py` or `synthetic/run_synthetic_api.py` for complete examples.
+
 ## Overview
 
-The BAX framework requires you to provide **5 simple functions per objective** for multi-objective optimization:
+The BAX framework requires you to provide **3 core functions per objective**:
 
-1. **Oracle function for objective 1** - Runs expensive simulation
-2. **Oracle function for objective 2** - Runs expensive simulation
-3. **Objective function for objective 1** - Converts model predictions → objective value
-4. **Objective function for objective 2** - Converts model predictions → objective value
-5. **Algorithm function** - Selects next candidates to evaluate
+1. **Oracle functions** - Run expensive simulations, return intermediate results
+2. **Objective functions** - Convert model predictions → objective values
+3. **Algorithm function** - Select next candidates to evaluate
 
-**Note**: While examples show 2 objectives, BAX supports any number of objectives - just provide the corresponding oracle and objective functions for each.
+**Two usage styles:**
+- **Simplified API**: `run_bax_optimization()` - automatic setup (recommended for new users)
+- **Manual API**: `BAXOpt()` class - full control (for advanced customization)
+
+**Note**: While examples show 2 objectives, BAX supports any number of objectives.
 
 ## Two Implementation Patterns
 
@@ -213,22 +239,47 @@ opt.run_acquisition(max_iterations=100)
 
 ## Examples
 
-### 1. Synthetic Example (`synthetic/`)
+### 1. Synthetic Simple (`synthetic_simple/`)
 
-A minimal example with simple analytical functions. Great for understanding the API.
+**Simplest starting point** - Pattern A (no grid expansion).
 
-**Run:**
+**Simplified API (recommended):**
 ```bash
-cd examples/synthetic
-python run_synthetic.py
+cd examples/synthetic_simple
+python run_simple_api.py       # ~180 lines, automatic setup
+```
+
+**Manual API (for comparison):**
+```bash
+python run_simple.py            # ~260 lines, manual setup
 ```
 
 **What it does:**
-- Optimizes two simple synthetic functions
-- Uses random sampling for acquisition
-- Demonstrates the minimal API
+- Optimizes sphere and Rosenbrock functions
+- Pattern A: direct evaluation (X0 = X)
+- Random sampling acquisition
 
-### 2. DAMA Example (`dama/`)
+### 2. Synthetic Grid (`synthetic/`)
+
+**Advanced example** - Pattern B (with grid expansion).
+
+**Simplified API (recommended):**
+```bash
+cd examples/synthetic
+python run_synthetic_api.py    # ~340 lines, automatic setup
+```
+
+**Manual API (for comparison):**
+```bash
+python run_synthetic.py         # ~470 lines, manual setup
+```
+
+**What it does:**
+- Optimizes over radial and angular grids
+- Pattern B: grid evaluation (X → X0/X1 expansion)
+- Demonstrates expansion functions
+
+### 3. DAMA Example (`dama/`)
 
 Full-featured particle accelerator optimization example. Shows advanced usage with complex simulations.
 
