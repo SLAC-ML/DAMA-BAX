@@ -75,6 +75,7 @@ slurm-*.out
 *.tmp
 *.temp
 .cache/
+**/tmp/
 
 # Misc
 CLAUDE.md
