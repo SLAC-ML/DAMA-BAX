@@ -27,8 +27,17 @@ python verify.py
 ### Using pip (Alternative)
 
 ```bash
+# Create virtual environment
+python -m venv .venv
+
+# Activate it
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
+
+# Install
 pip install -e .
-source .venv/bin/activate
+
+# Verify
 python verify.py
 ```
 
@@ -43,9 +52,11 @@ python run.py --case examples/synthetic_simple --max-iter 5
 
 You should see:
 - Initial data generation
-- Neural network training progress
+- Neural network training progress (net_0 and net_1)
 - BAX iterations with Pareto front updates
-- Final results saved to `examples/synthetic_simple/models_simple_api/`
+- Final results saved to `./models_simple/`
+
+**Note**: net_1 (Rosenbrock) may show higher loss values (100-900) initially - this is normal as Rosenbrock produces larger values than sphere. Loss should decrease during training.
 
 ---
 
@@ -254,122 +265,12 @@ opt.run_acquisition(max_iterations=100)
 
 ---
 
-## When to Use BAX
-
-✅ **Use BAX when:**
-- You have multiple competing objectives to optimize
-- Your simulations are expensive (minutes to hours per evaluation)
-- You want to find the Pareto front efficiently
-- You can provide ~100-1000 initial samples for training
-
-❌ **Don't use BAX when:**
-- Simulations are cheap (<1 second) - use traditional MOO algorithms
-- You can't provide initial training data
-- You need real-time optimization
-
----
-
-## Architecture
-
-```
-DAMA-BAX/
-├── core/                      # Generic BAX framework
-│   ├── bax_core.py           # Main optimizer + simplified API
-│   └── da_NN.py              # Neural network architecture
-├── examples/                  # Example implementations
-│   ├── synthetic_simple/     # Starter example
-│   ├── synthetic/            # Intermediate example (grid expansion)
-│   └── dama/                 # Advanced example (accelerator optimization)
-├── docs/                      # Detailed documentation
-│   ├── FRAMEWORK_GUIDE.md    # Complete user guide
-│   ├── API_QUICK_REFERENCE.md # API reference
-│   ├── DAMA_EXAMPLE.md       # DAMA walkthrough
-│   └── CONTRIBUTING.md       # Development guide
-├── run.py                     # Unified runner (recommended!)
-├── verify.py                 # Installation checker
-└── README.md                 # This file
-```
-
----
-
 ## Documentation
 
 - **[Framework Guide](docs/FRAMEWORK_GUIDE.md)** - Complete guide with patterns and best practices
 - **[API Reference](docs/API_QUICK_REFERENCE.md)** - Quick API reference for both APIs
 - **[Examples](examples/README.md)** - Detailed examples documentation
 - **[DAMA Example](docs/DAMA_EXAMPLE.md)** - Advanced full-featured example
-- **[Migration Guide](DAMA_MIGRATION_GUIDE.md)** - Migrating to unified API
 - **[Contributing](docs/CONTRIBUTING.md)** - Development guidelines
 
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| **Out of memory** | Reduce `--nn-batch-size 500` or `--n-sampling 25` |
-| **Training too slow** | Use GPU `--device cuda` or reduce `--nn-neurons 400` |
-| **Bad Pareto front** | Increase `--n-sampling` or `--max-iter` |
-| **Module not found** | Activate venv: `source .venv/bin/activate` |
-| **NaN in training** | Reduce learning rate `--nn-lr 1e-5` or check data normalization |
-
-**Still stuck?** Check `docs/FRAMEWORK_GUIDE.md` for detailed troubleshooting.
-
----
-
-## Automatic Resume
-
-BAX automatically resumes from checkpoints if interrupted:
-
-```bash
-# Run initially
-python run.py --case examples/dama --run-id 3
-
-# Interrupted? Just re-run with same parameters
-python run.py --case examples/dama --run-id 3  # Resumes automatically!
-```
-
----
-
-## SLURM Cluster Usage
-
-```bash
-# Edit job.sh with your cluster settings, then:
-sbatch job.sh
-
-# Or with custom case:
-CASE_DIR=examples/synthetic RUN_ID=1 MAX_ITER=50 sbatch job.sh
-```
-
----
-
-## Citation
-
-If you use BAX in your research, please cite:
-
-```
-[Citation information to be added]
-```
-
----
-
-## License
-
-MIT License - see LICENSE file for details
-
----
-
-## Support
-
-- **Getting Started**: This README and `examples/synthetic_simple/`
-- **Documentation**: See `docs/` directory
-- **Examples**: See `examples/` directory for working implementations
-- **Issues**: Open an issue on GitHub
-- **Advanced Questions**: Check `docs/FRAMEWORK_GUIDE.md`
-
-**Quick tips:**
-1. Start with `synthetic_simple` example
-2. Read the minimal code example above
-3. Try running with different `--n-sampling` and `--max-iter`
-4. Check `docs/FRAMEWORK_GUIDE.md` for patterns and best practices
-5. Use `examples/dama/` as reference for complex applications
+For troubleshooting, SLURM usage, and advanced topics, see the Framework Guide.
