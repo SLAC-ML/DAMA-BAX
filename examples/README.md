@@ -243,15 +243,16 @@ opt.run_acquisition(max_iterations=100)
 
 **Simplest starting point** - Pattern A (no grid expansion).
 
-**Simplified API (recommended):**
+**Unified runner (recommended):**
 ```bash
-cd examples/synthetic_simple
-python run_simple_api.py       # ~180 lines, automatic setup
+python run.py --case examples/synthetic_simple
 ```
 
-**Manual API (for comparison):**
+**Standalone execution:**
 ```bash
-python run_simple.py            # ~260 lines, manual setup
+cd examples/synthetic_simple
+python run_simple_api.py       # Simplified API (~180 lines)
+python run_simple.py           # Manual API (~260 lines)
 ```
 
 **What it does:**
@@ -263,15 +264,16 @@ python run_simple.py            # ~260 lines, manual setup
 
 **Advanced example** - Pattern B (with grid expansion).
 
-**Simplified API (recommended):**
+**Unified runner (recommended):**
 ```bash
-cd examples/synthetic
-python run_synthetic_api.py    # ~340 lines, automatic setup
+python run.py --case examples/synthetic --max-iter 5
 ```
 
-**Manual API (for comparison):**
+**Standalone execution:**
 ```bash
-python run_synthetic.py         # ~470 lines, manual setup
+cd examples/synthetic
+python run_synthetic_api.py    # Simplified API (~340 lines)
+python run_synthetic.py        # Manual API (~470 lines)
 ```
 
 **What it does:**
@@ -283,10 +285,16 @@ python run_synthetic.py         # ~470 lines, manual setup
 
 Full-featured particle accelerator optimization example. Shows advanced usage with complex simulations.
 
-**Run:**
+**Unified runner (recommended):**
+```bash
+python run.py --case examples/dama --run-id 3 --max-iter 100
+```
+
+**Standalone execution:**
 ```bash
 cd examples/dama
-python run_dama.py --run-id 3 --max-iter 100
+python run_dama_api.py         # Simplified API
+python run_dama.py --run-id 3  # Manual API
 ```
 
 **What it does:**

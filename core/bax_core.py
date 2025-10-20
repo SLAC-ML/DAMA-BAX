@@ -864,62 +864,41 @@ def get_curr_loop_num(model_root, model_name='net1'):
 # Simplified BAX Runner API
 # =============================================================================
 
-def _infer_input_dims(oracles, expansion_funcs, bounds, n_test=5, seed=42):
+def _infer_input_dims(init_sampler, bounds, n_test=5, seed=42):
     """
-    Infer input dimensionality for each objective by calling oracles.
+    Infer input dimensionality from init_sampler or bounds.
 
     Parameters:
     -----------
-    oracles : list of functions
-        Oracle functions
-    expansion_funcs : list of functions or None
-        Expansion functions (None for Pattern A)
+    init_sampler : function or None
+        Custom initialization sampler
     bounds : list of tuples or None
         Bounds for each dimension
     n_test : int
-        Number of test samples to generate
+        Number of test samples to generate (for init_sampler test)
     seed : int
         Random seed
 
     Returns:
     --------
-    input_dims : list of int
-        Input dimensions for each objective's oracle
+    input_dims : int
+        Input dimensionality
     """
-    np.random.seed(seed)
-
-    # If expansion functions provided, we need base dimensions
-    # Otherwise, try to infer from bounds or use default
-    if expansion_funcs is not None:
-        # Pattern B: Need to infer base dimensions
-        # Assume all expansion functions expect same base dimensions
-        if bounds is not None:
-            base_dims = len(bounds)
-        else:
-            base_dims = 2  # Default
-
-        # Test with base samples
-        X_base_test = np.random.rand(n_test, base_dims)
-
-        input_dims = []
-        for expand_func in expansion_funcs:
-            if expand_func is None:
-                # No expansion for this objective
-                input_dims.append(base_dims)
-            else:
-                X_expanded = expand_func(X_base_test)
-                input_dims.append(X_expanded.shape[1])
-
-        return input_dims
+    if bounds is not None:
+        # Use bounds to determine dimensionality
+        return len(bounds)
+    elif init_sampler is not None:
+        # Try calling init_sampler with small n to infer dims
+        try:
+            X_list_test, _ = init_sampler()
+            # Assume all objectives have same input dims (from first one)
+            return X_list_test[0].shape[1]
+        except:
+            # Fall back to default
+            return 2
     else:
-        # Pattern A: No expansion, oracle input = optimization input
-        if bounds is not None:
-            n_dims = len(bounds)
-        else:
-            n_dims = 2  # Default
-
-        # All objectives have same input dimensions
-        return [n_dims] * len(oracles)
+        # Default dimensionality
+        return 2
 
 
 def _generate_init_samples(n_init, input_dims, bounds=None, seed=42):
@@ -956,9 +935,13 @@ def _generate_init_samples(n_init, input_dims, bounds=None, seed=42):
     return X
 
 
-def _auto_generate_init_data(oracles, n_init, input_dims, bounds, expansion_funcs, seed):
+def _auto_generate_init_data(oracles, n_init, input_dims, bounds, seed):
     """
-    Automatically generate initial training data.
+    Automatically generate initial training data using LHS.
+
+    Note: This generates data in the oracle's input space. If your oracle
+    expects expanded inputs (e.g., grid points), you should provide a custom
+    init_sampler instead of using this automatic method.
 
     Parameters:
     -----------
@@ -966,12 +949,10 @@ def _auto_generate_init_data(oracles, n_init, input_dims, bounds, expansion_func
         Oracle functions
     n_init : int or list of int
         Number of initial samples (per objective if list)
-    input_dims : list of int
-        Input dimensions for each objective
+    input_dims : int
+        Input dimensionality (same for all objectives)
     bounds : list of tuples or None
         Bounds for optimization variables
-    expansion_funcs : list of functions or None
-        Expansion functions for Pattern B
     seed : int
         Random seed
 
@@ -993,46 +974,20 @@ def _auto_generate_init_data(oracles, n_init, input_dims, bounds, expansion_func
     X_list = []
     Y_list = []
 
-    if expansion_funcs is not None:
-        # Pattern B: Generate base samples, then expand
-        # Assume all expansion functions use same base dimensions
-        base_dims = len(bounds) if bounds is not None else 2
+    # Generate samples for each objective independently
+    for i, oracle in enumerate(oracles):
+        print(f"  Objective {i}: Generating {n_init_list[i]} samples...")
 
-        print(f"Generating {n_init_list[0]} base configurations...")
-        X_base = _generate_init_samples(n_init_list[0], base_dims, bounds, seed)
+        X = _generate_init_samples(n_init_list[i], input_dims, bounds, seed + i)
 
-        for i, (oracle, expand_func) in enumerate(zip(oracles, expansion_funcs)):
-            print(f"  Objective {i}: ", end='')
+        print(f"    Evaluating oracle...")
+        Y = oracle(X)
 
-            if expand_func is None:
-                # No expansion for this objective
-                X_expanded = X_base
-            else:
-                X_expanded = expand_func(X_base)
+        if len(Y.shape) == 2 and Y.shape[1] == 1:
+            Y = Y.flatten()
 
-            print(f"Evaluating {X_expanded.shape[0]} oracle calls...")
-            Y = oracle(X_expanded)
-
-            if len(Y.shape) == 2 and Y.shape[1] == 1:
-                Y = Y.flatten()
-
-            X_list.append(X_expanded)
-            Y_list.append(Y)
-    else:
-        # Pattern A: No expansion, generate samples directly
-        for i, oracle in enumerate(oracles):
-            print(f"  Objective {i}: Generating {n_init_list[i]} samples...")
-
-            X = _generate_init_samples(n_init_list[i], input_dims[i], bounds, seed + i)
-
-            print(f"    Evaluating oracle...")
-            Y = oracle(X)
-
-            if len(Y.shape) == 2 and Y.shape[1] == 1:
-                Y = Y.flatten()
-
-            X_list.append(X)
-            Y_list.append(Y)
+        X_list.append(X)
+        Y_list.append(Y)
 
     return X_list, Y_list
 
@@ -1103,12 +1058,13 @@ def run_bax_optimization(
     input_dims=None,
     bounds=None,
     init_sampler=None,
-    expansion_funcs=None,
     max_iterations=100,
     n_sampling=50,
     model_root='./models',
     model_names=None,
     nn_config=None,
+    test_ratio=0.05,
+    weight_new=10,
     device=None,
     snapshot=True,
     verbose=True,
@@ -1120,6 +1076,9 @@ def run_bax_optimization(
     This is a high-level convenience function that automates the boilerplate
     of setting up BAX optimization. For more control, use BAXOpt directly.
 
+    Note: Any grid expansion or ensemble evaluation logic should be implemented
+    inside your objective functions, not exposed as separate parameters.
+
     Parameters:
     -----------
     oracles : list of functions
@@ -1129,6 +1088,7 @@ def run_bax_optimization(
     objectives : list of functions
         Objective functions [objective_obj1, objective_obj2, ...]
         Each objective(x, fn_model) returns obj: objective values
+        If your problem requires grid expansion, handle it inside the objective
 
     algorithm : function
         Acquisition algorithm function
@@ -1138,9 +1098,9 @@ def run_bax_optimization(
         Number of initial samples (default: 100)
         If list, specifies samples per objective
 
-    input_dims : list of int or None, optional
-        Input dimensions for each objective's oracle
-        If None, auto-inferred (default: None)
+    input_dims : int or None, optional
+        Input dimensionality for oracles
+        If None, auto-inferred from bounds or init_sampler (default: None)
 
     bounds : list of tuples or None, optional
         Bounds [(lower, upper), ...] for each optimization dimension
@@ -1148,13 +1108,9 @@ def run_bax_optimization(
 
     init_sampler : function or None, optional
         Custom initialization sampler function
-        init_sampler(n_samples, n_dims, bounds, seed) returns X
-        If None, uses Latin Hypercube Sampling (default: None)
-
-    expansion_funcs : list of functions or None, optional
-        Expansion functions for Pattern B (grid/ensemble evaluation)
-        [expand_obj1, expand_obj2, ...] where expand(x_base) returns X_expanded
-        If None, assumes Pattern A (no expansion) (default: None)
+        init_sampler() returns (X_list, Y_list) where X_list and Y_list are lists
+        If None, uses automatic Latin Hypercube Sampling (default: None)
+        Note: Use custom init_sampler if your oracles need special input format
 
     max_iterations : int, optional
         Maximum BAX iterations (default: 100)
@@ -1176,6 +1132,13 @@ def run_bax_optimization(
         - epochs: initial training epochs (default: 150)
         - iter_epochs: per-iteration epochs (default: 10)
         - batch_size: batch size (default: 1000)
+        - model_type: architecture ('fc', 'split', 'sine') (default: 'split')
+
+    test_ratio : float, optional
+        Fraction of data to use for test set (default: 0.05)
+
+    weight_new : float, optional
+        Weight for new data points in loss function (default: 10)
 
     device : torch.device or None, optional
         Device to use (default: auto-detect CUDA)
@@ -1199,12 +1162,13 @@ def run_bax_optimization(
         - 'X_init': initial training data (list per objective)
         - 'Y_init': initial oracle outputs (list per objective)
         - 'final_models': trained surrogate models
+        - 'optimizer': the BAXOpt instance
 
     Examples:
     ---------
-    Simplest usage (Pattern A - no expansion):
+    Basic usage with automatic LHS initialization:
 
-    >>> results = run_bax_optimization(
+    >>> opt, results = run_bax_optimization(
     ...     oracles=[oracle_obj1, oracle_obj2],
     ...     objectives=[objective_obj1, objective_obj2],
     ...     algorithm=algo,
@@ -1212,16 +1176,21 @@ def run_bax_optimization(
     ...     max_iterations=100
     ... )
 
-    Advanced usage (Pattern B - with expansion):
+    Advanced usage with custom initialization:
 
-    >>> results = run_bax_optimization(
+    >>> def my_init_sampler():
+    ...     # Generate custom initial data
+    ...     X1, Y1 = generate_da_data()
+    ...     X2, Y2 = generate_ma_data()
+    ...     return [X1, X2], [Y1, Y2]
+    >>>
+    >>> opt, results = run_bax_optimization(
     ...     oracles=[oracle_obj1, oracle_obj2],
     ...     objectives=[objective_obj1, objective_obj2],
     ...     algorithm=algo,
-    ...     expansion_funcs=[expand_obj1, expand_obj2],
+    ...     init_sampler=my_init_sampler,
     ...     bounds=[(0, 10), (-5, 5)],
     ...     nn_config={'n_neur': 1000, 'lr': 1e-3},
-    ...     n_init=100,
     ...     max_iterations=200
     ... )
     """
@@ -1240,7 +1209,7 @@ def run_bax_optimization(
     if input_dims is None:
         if verbose:
             print("Step 1: Inferring input dimensions...")
-        input_dims = _infer_input_dims(oracles, expansion_funcs, bounds, seed=seed)
+        input_dims = _infer_input_dims(init_sampler, bounds, seed=seed)
         if verbose:
             print(f"  Inferred dimensions: {input_dims}")
             print()
@@ -1256,22 +1225,16 @@ def run_bax_optimization(
         if verbose:
             print("  Using custom initialization sampler...")
 
-        # Assume init_sampler returns list of X arrays (one per objective)
-        X_list = init_sampler(n_init, input_dims, bounds, seed)
+        # init_sampler returns (X_list, Y_list) directly
+        X_list, Y_list = init_sampler()
 
-        # Evaluate oracles
-        Y_list = []
-        for i, (oracle, X) in enumerate(zip(oracles, X_list)):
-            if verbose:
-                print(f"  Objective {i}: Evaluating {X.shape[0]} oracle calls...")
-            Y = oracle(X)
-            if len(Y.shape) == 2 and Y.shape[1] == 1:
-                Y = Y.flatten()
-            Y_list.append(Y)
+        # Ensure Y arrays are 1D
+        Y_list = [Y.flatten() if len(Y.shape) == 2 and Y.shape[1] == 1 else Y
+                  for Y in Y_list]
     else:
-        # Automatic initialization
+        # Automatic initialization with LHS
         X_list, Y_list = _auto_generate_init_data(
-            oracles, n_init, input_dims, bounds, expansion_funcs, seed
+            oracles, n_init, input_dims, bounds, seed
         )
 
     if verbose:
@@ -1304,6 +1267,7 @@ def run_bax_optimization(
     nn_epochs = nn_config.get('epochs', 150)
     nn_iter_epochs = nn_config.get('iter_epochs', 10)
     nn_batch_size = nn_config.get('batch_size', 1000)
+    nn_model_type = nn_config.get('model_type', 'split')
 
     # ========================================================================
     # Step 5: Create and configure BAXOpt
@@ -1330,9 +1294,15 @@ def run_bax_optimization(
     opt.epochs = nn_epochs
     opt.iter_epochs = nn_iter_epochs
     opt.batch_size = nn_batch_size
+    opt.test_ratio = test_ratio
+    opt.weight_new = weight_new
+    opt.model_type = nn_model_type
 
-    # Set n_feat for each objective (use max to be safe)
-    opt.n_feat = max(input_dims)
+    # Set n_feat - use input_dims (can be int or list, will handle appropriately)
+    if isinstance(input_dims, list):
+        opt.n_feat = max(input_dims)
+    else:
+        opt.n_feat = input_dims
 
     if verbose:
         print(f"  Models: {opt.model_names}")

@@ -1,24 +1,24 @@
 """
-Simple Synthetic BAX Example Using High-Level API
+Simple Synthetic BAX Example - New Unified API
 
-This demonstrates the simplified run_bax_optimization() API which automates:
-- Initial data generation (automatic LHS sampling)
-- Normalization setup
-- BAXOpt configuration
-- Model training and optimization loop
+This demonstrates the new get_bax_config() pattern where:
+- BAX parameters (n_init, max_iter, etc.) are controlled by run.py CLI
+- Problem-specific logic is provided via get_bax_config()
+- Only 3 functions required: oracles, objectives, algorithm
 
-User only needs to provide 3 functions: oracles, objectives, and algorithm!
+Usage:
+  python run.py --case examples/synthetic_simple --n-init 50 --max-iter 5
+
+Or standalone:
+  python run_simple_api_v2.py
 """
 
 import os
 import sys
 import numpy as np
-import torch
 
 # Add core to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../core'))
-
-from bax_core import run_bax_optimization, pareto_front
 
 
 # ============================================================================
@@ -36,11 +36,11 @@ def oracle_obj1(X):
 
     Returns:
     --------
-    Y : np.ndarray, shape (n, 1)
+    Y : np.ndarray, shape (n,)
         Function values
     """
-    Y = np.sum(X**2, axis=1, keepdims=True)
-    Y += 0.01 * np.random.randn(X.shape[0], 1)  # Add noise
+    Y = np.sum(X**2, axis=1)
+    Y += 0.01 * np.random.randn(X.shape[0])  # Add noise
     return Y
 
 
@@ -55,13 +55,13 @@ def oracle_obj2(X):
 
     Returns:
     --------
-    Y : np.ndarray, shape (n, 1)
+    Y : np.ndarray, shape (n,)
         Function values
     """
     x1 = X[:, 0]
     x2 = X[:, 1]
-    Y = ((1 - x1)**2 + 100 * (x2 - x1**2)**2).reshape(-1, 1)
-    Y += 0.1 * np.random.randn(X.shape[0], 1)  # Add noise
+    Y = (1 - x1)**2 + 100 * (x2 - x1**2)**2
+    Y += 0.1 * np.random.randn(X.shape[0])  # Add noise
     return Y
 
 
@@ -151,27 +151,85 @@ def make_algo():
 
 
 # ============================================================================
-# STEP 4: Run BAX Optimization
+# STEP 4: Entry Point for Unified Runner
 # ============================================================================
 
-def main():
+def get_bax_config(args):
+    """
+    Called by run.py to get case configuration.
+
+    All BAX parameters (n_init, max_iter, nn_neurons, etc.) are handled by
+    run.py CLI arguments. This function only returns problem-specific config.
+
+    Parameters:
+    -----------
+    args : argparse.Namespace
+        Arguments from run.py (e.g., args.run_id, args.max_iter)
+        Note: These are for information only; BAX params are handled by run.py
+
+    Returns:
+    --------
+    config : dict
+        Configuration dictionary with:
+        - 'oracles': list of oracle functions
+        - 'objectives': list of objective functions
+        - 'algorithm': acquisition function
+        - 'model_root': optional model directory (can use args.run_id)
+        - Other optional keys: init_sampler, model_names, bounds, etc.
+    """
+    # Determine model directory based on run_id if provided
+    if hasattr(args, 'run_id') and args.run_id is not None:
+        model_root = f'./models_simple_run_{args.run_id}/'
+    else:
+        model_root = './models_simple/'
+
+    return {
+        'oracles': [oracle_obj1, oracle_obj2],
+        'objectives': [objective_obj1, objective_obj2],
+        'algorithm': make_algo(),
+        'model_root': model_root,
+        # Can optionally specify defaults for BAX params (overridden by CLI):
+        # 'n_init': 50,
+        # 'max_iterations': 3,
+        # 'n_sampling': 10,
+    }
+
+
+# ============================================================================
+# Optional: Standalone Execution
+# ============================================================================
+
+if __name__ == '__main__':
+    """
+    Can still run standalone, but recommended to use:
+      python run.py --case examples/synthetic_simple
+    """
+    from bax_core import run_bax_optimization, pareto_front
+    import torch
+
     print("=" * 70)
-    print("Simple Synthetic BAX Example - High-Level API")
+    print("Simple Synthetic BAX Example - Standalone Mode")
+    print("=" * 70)
+    print("TIP: Use unified runner for more control:")
+    print("  python run.py --case examples/synthetic_simple --n-init 100 --max-iter 10")
     print("=" * 70)
     print()
 
-    # That's it! Just call run_bax_optimization with 3 functions!
-    opt, results = run_bax_optimization(
-        # Required: The 3 core functions
-        oracles=[oracle_obj1, oracle_obj2],
-        objectives=[objective_obj1, objective_obj2],
-        algorithm=make_algo(),
+    # Create dummy args
+    class Args:
+        run_id = None
 
-        # Optional: Configuration (all have sensible defaults)
+    config = get_bax_config(Args())
+
+    # Run with hardcoded defaults
+    opt, results = run_bax_optimization(
+        oracles=config['oracles'],
+        objectives=config['objectives'],
+        algorithm=config['algorithm'],
+        model_root=config['model_root'],
         n_init=50,
         max_iterations=3,
         n_sampling=10,
-        model_root='./models_simple_api/',
         nn_config={'n_neur': 100, 'lr': 1e-3, 'epochs': 30, 'iter_epochs': 10},
         device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         snapshot=True,
@@ -179,19 +237,12 @@ def main():
         seed=42,
     )
 
-    # ========================================================================
     # Evaluate final Pareto front
-    # ========================================================================
     print("\nEvaluating final Pareto front...")
-
-    # Generate test set
     X_test = np.random.rand(200, 2)
-
-    # Evaluate using objective functions
     obj1_test = objective_obj1(X_test, opt.fn[0])
     obj2_test = objective_obj2(X_test, opt.fn[1])
 
-    # Find Pareto front
     objectives = np.column_stack([obj1_test.flatten(), obj2_test.flatten()])
     pf = pareto_front(objectives)
 
@@ -208,13 +259,3 @@ def main():
     print("=" * 70)
     print("DONE!")
     print("=" * 70)
-    print()
-    print("Compare this file (run_simple_api.py) with run_simple.py:")
-    print("  - run_simple.py: ~260 lines (manual setup)")
-    print("  - run_simple_api.py: ~180 lines (automatic setup)")
-    print("  - Key difference: No manual data generation, normalization, or BAXOpt config!")
-    print()
-
-
-if __name__ == '__main__':
-    main()

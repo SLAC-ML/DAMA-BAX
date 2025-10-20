@@ -191,14 +191,15 @@ opt, results = run_bax_optimization(
     # Custom bounds
     bounds=[(0, 10), (-5, 5)],
 
-    # Pattern B: Grid expansion
-    expansion_funcs=[expand_obj1, expand_obj2],
-
     # Custom NN config
     nn_config={'n_neur': 1000, 'lr': 1e-3, 'epochs': 200},
 
-    # Custom initialization
+    # Custom initialization (required if oracles expect special input format)
     init_sampler=my_custom_sampler,
+
+    # Training parameters
+    test_ratio=0.05,          # Test set size
+    weight_new=10,            # Weight for new data points in loss
 
     # Other
     model_names=['model1', 'model2'],
@@ -207,7 +208,11 @@ opt, results = run_bax_optimization(
 )
 ```
 
-**See:** `examples/synthetic_simple/run_simple_api.py` for complete example
+**Pattern B (Grid Expansion)**: If your oracles expect expanded inputs (e.g., grids), handle expansion INSIDE objectives and algorithm. See `examples/synthetic/run_synthetic_api.py` for complete example.
+
+**See also:**
+- `examples/synthetic_simple/run_simple_api.py` - Simple pattern without expansion
+- `examples/synthetic/run_synthetic_api.py` - Grid expansion pattern
 
 ---
 
@@ -285,6 +290,8 @@ def make_algo():
 
 ### The Key Pattern
 
+**NEW in unified API**: Expansion logic is now COMPLETELY HIDDEN inside objectives and algorithm functions. The BAX framework doesn't know about it - it just sees functions that accept and return arrays. This simplifies the API significantly.
+
 **IMPORTANT**: In most real applications, oracles and objectives work with **different input dimensions**:
 
 - **Base configurations (X)**: What you're optimizing (e.g., n, 4)
@@ -315,11 +322,11 @@ def objective_obj1(x, fn_model):  # x: (n, 2)
 
 **Use when:** Simulation evaluates configurations directly.
 
-**Example:** `examples/synthetic_simple/run_simple.py`
+**Example:** `examples/synthetic_simple/run_simple_api.py`
 
 #### Pattern B: With Expansion (Like DAMA)
 
-Oracle receives expanded input, objective handles expansion:
+Oracle receives expanded input, objective handles expansion internally (not exposed to BAX framework):
 
 ```python
 # Expansion function
@@ -354,7 +361,7 @@ def objective_obj1(x, fn_model):  # x: (n, 2) base
 
 **Use when:** Simulation evaluates on grids/ensembles (particles, angles, radii, etc.).
 
-**Example:** `examples/synthetic/run_synthetic.py`, `examples/dama/`
+**Example:** `examples/synthetic/run_synthetic_api.py` (grid expansion), `examples/dama/` (spatial+momentum grids)
 
 ### Why Different Expansions for Each Objective?
 

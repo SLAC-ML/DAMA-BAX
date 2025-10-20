@@ -15,5 +15,17 @@
 source /sdf/group/mli/zhezhang/conda/bin/activate
 conda activate ml
 
-# Run code
-python run_3.py
+# Configuration: Set these via environment variables when submitting
+# Example: CASE_DIR=examples/dama RUN_ID=3 MAX_ITER=100 sbatch job.sh
+CASE_DIR=${CASE_DIR:-"examples/dama"}
+RUN_ID=${RUN_ID:-3}
+MAX_ITER=${MAX_ITER:-3200}
+N_SAMPLING=${N_SAMPLING:-50}
+DEVICE=${DEVICE:-"auto"}
+
+# Run via unified runner
+python run.py --case "${CASE_DIR}" \
+              --run-id ${RUN_ID} \
+              --max-iter ${MAX_ITER} \
+              --n-sampling ${N_SAMPLING} \
+              --device ${DEVICE}

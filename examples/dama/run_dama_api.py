@@ -423,5 +423,23 @@ def main():
     print()
 
 
+def run(args, extra_args):
+    """
+    Entry point for unified runner.
+
+    This function is called by the unified run.py script.
+    Can still run standalone with: python run_dama_api.py
+
+    Parameters:
+    -----------
+    args : argparse.Namespace
+        Common arguments from unified runner
+    extra_args : list
+        Additional unparsed arguments
+    """
+    # The main() function doesn't use argparse, so just call it directly
+    main()
+
+
 if __name__ == '__main__':
     main()

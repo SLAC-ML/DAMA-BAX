@@ -2,153 +2,233 @@
 
 **Bayesian Algorithm Execution for Multi-Objective Optimization with Expensive Simulations**
 
-BAX is a framework that uses neural network surrogate models and Bayesian optimization to efficiently explore the Pareto front when simulations are expensive, requiring only a minimal 5-function API from users.
-
----
-
-## Features
-
-- **Multi-objective optimization** supporting any number of objectives
-- **Neural network surrogates** (PyTorch) to replace expensive simulations
-- **Bayesian acquisition strategy** for efficient sampling
-- **Automatic checkpointing** and resume capability
-- **Simplified API**: Just 3 functions + automatic initialization (NEW!)
-- **Manual API**: Full control with 5-function interface
-- **Parallel simulation** support via ProcessPoolExecutor
-- **Flexible patterns**: Direct evaluation OR grid/ensemble expansion
+BAX uses neural network surrogate models to efficiently find Pareto-optimal solutions when simulations are expensive. You provide 3 simple functions (oracles, objectives, algorithm) and BAX handles surrogate training, acquisition, and iterative optimization.
 
 ---
 
 ## Installation
 
-### Prerequisites
-
-- Python 3.8 or higher
-- CUDA-capable GPU (optional, but recommended for training)
-
-### Using UV (Recommended)
+### Quick Install
 
 ```bash
-# Install uv
+# Install dependencies
 pip install uv
-
-# Clone and install
 cd DAMA-BAX
 uv sync
-```
 
-### Using pip
+# Activate virtual environment
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
 
-```bash
-cd DAMA-BAX
-pip install -e .
-```
-
-### Verify Installation
-
-```bash
+# Verify installation
 python verify.py
 ```
 
-This checks Python version, dependencies, core modules, and compute devices.
+### Using pip (Alternative)
+
+```bash
+pip install -e .
+source .venv/bin/activate
+python verify.py
+```
 
 ---
 
-## Quick Start
+## Quick Start - Run Your First Example
 
-### Simplified API (Recommended for New Users)
+```bash
+# Run the simplest example (takes ~30 seconds)
+python run.py --case examples/synthetic_simple --max-iter 5
+```
 
-Just provide 3 functions and BAX handles the rest:
+You should see:
+- Initial data generation
+- Neural network training progress
+- BAX iterations with Pareto front updates
+- Final results saved to `examples/synthetic_simple/models_simple_api/`
+
+---
+
+## Minimal Code Example
+
+Here's all you need to use BAX (from `examples/synthetic_simple/run_simple_api.py`):
 
 ```python
-import sys
-sys.path.insert(0, 'core')
 from bax_core import run_bax_optimization
+import numpy as np
 
-# 1. Oracle functions (your expensive simulations)
+# 1. Define oracle functions (your expensive simulations)
 def oracle_obj1(X):
-    return your_expensive_simulation_1(X)
+    """Sphere function: sum of squares."""
+    return np.sum(X**2, axis=1).reshape(-1, 1)
 
 def oracle_obj2(X):
-    return your_expensive_simulation_2(X)
+    """Rosenbrock function."""
+    return np.sum(100*(X[:, 1:] - X[:, :-1]**2)**2 + (1 - X[:, :-1])**2, axis=1).reshape(-1, 1)
 
-# 2. Objective functions (transform predictions → objectives)
+# 2. Define objective functions (convert predictions → objectives)
 def objective_obj1(x, fn_model):
-    predictions = fn_model(x)
-    return calculate_objective(predictions)
+    return fn_model(x).T  # Just pass through predictions
 
 def objective_obj2(x, fn_model):
-    predictions = fn_model(x)
-    return calculate_objective(predictions)
+    return fn_model(x).T
 
-# 3. Algorithm function (acquisition strategy)
+# 3. Define algorithm (acquisition strategy)
 def make_algo():
     def algo(fn_model_list):
-        # Your acquisition strategy here
-        candidates = your_optimization_method(fn_model_list)
-        return candidates_obj1, candidates_obj2
+        # Random sampling (simple but effective!)
+        candidates = np.random.rand(50, 2)
+        return candidates, candidates
     return algo
 
-# Run optimization - automatic initialization!
+# That's it! Run optimization:
 opt, results = run_bax_optimization(
     oracles=[oracle_obj1, oracle_obj2],
     objectives=[objective_obj1, objective_obj2],
     algorithm=make_algo(),
-    n_init=100,           # Automatic LHS sampling
+    n_init=50,           # Initial samples (automatic)
     max_iterations=100
 )
 ```
 
-**Features:**
-- Automatic initial data generation (Latin Hypercube Sampling)
-- Automatic normalization setup
-- Automatic neural network configuration
-- Custom bounds and initialization supported
-
-See `examples/synthetic_simple/run_simple_api.py` for a complete working example.
+**Key insight:** BAX trains cheap surrogate models to replace expensive oracles, then uses them to intelligently select the next points to evaluate.
 
 ---
 
-### Manual API (For Advanced Customization)
+## Examples
 
-For full control, use the 5-function interface:
+| Example | Complexity | What it demonstrates | Run command |
+|---------|-----------|---------------------|-------------|
+| **synthetic_simple** | Starter | Basic 3-function API, random sampling | `python run.py --case examples/synthetic_simple` |
+| **synthetic** | Intermediate | Grid expansion, custom initialization | `python run.py --case examples/synthetic --max-iter 5` |
+| **dama** | Advanced | Particle accelerator optimization, NSGA2 + boundary sampling | `python run.py --case examples/dama --run-id 3 --max-iter 100` |
+
+**Try them in order!** Each example builds on concepts from the previous one.
+
+### Running Examples
+
+```bash
+# Simple: Direct evaluation
+python run.py --case examples/synthetic_simple
+
+# Grid expansion pattern
+python run.py --case examples/synthetic --max-iter 5
+
+# Full application (requires pretrained models in examples/dama/resources/)
+python run.py --case examples/dama --run-id 3 --max-iter 100
+
+# Custom parameters
+python run.py --case examples/synthetic \
+              --max-iter 10 \
+              --n-sampling 20 \
+              --nn-neurons 400 \
+              --seed 42
+```
+
+---
+
+## Creating Your Own Optimization
+
+### Step 1: Create a case directory
+
+```bash
+mkdir my_optimization
+cd my_optimization
+```
+
+### Step 2: Implement `get_bax_config(args)`
+
+Create `run_my_api.py`:
 
 ```python
-import sys
-sys.path.insert(0, 'core')
+import numpy as np
+from bax_core import run_bax_optimization
 
-from bax_core import BAXOpt
-import da_NN as dann
-
-# 1-2. Oracle functions (expensive simulations)
 def oracle_obj1(X):
-    return your_expensive_simulation_1(X)
+    # Your expensive simulation here
+    return your_simulation_1(X)
 
 def oracle_obj2(X):
-    return your_expensive_simulation_2(X)
+    # Another expensive simulation
+    return your_simulation_2(X)
 
-# 3-4. Objective functions (convert predictions → objectives)
 def objective_obj1(x, fn_model):
     predictions = fn_model(x)
-    return calculate_objective(predictions)
+    return your_metric_calculation(predictions)
 
 def objective_obj2(x, fn_model):
     predictions = fn_model(x)
-    return calculate_other_objective(predictions)
+    return your_other_metric(predictions)
 
-# 5. Algorithm function (acquisition strategy)
 def make_algo():
     def algo(fn_model_list):
-        candidates = optimize_with_surrogates(fn_model_list)
-        return candidates_obj1, candidates_obj2
+        # Your acquisition strategy (GA, Bayesian opt, random, etc.)
+        candidates = your_optimization_method(fn_model_list)
+        return candidates, candidates
     return algo
 
-# Generate initial data
-X_init = sample_initial_points(n=1000, dims=4)
-Y1_init = oracle_obj1(X_init)
-Y2_init = oracle_obj2(X_init)
+def get_bax_config(args):
+    """Entry point for unified runner."""
+    return {
+        'oracles': [oracle_obj1, oracle_obj2],
+        'objectives': [objective_obj1, objective_obj2],
+        'algorithm': make_algo(),
+        'model_root': f'./models_run_{args.run_id}/' if args.run_id else './models/',
+    }
+```
 
-# Setup normalization
+### Step 3: Run it!
+
+```bash
+python /path/to/DAMA-BAX/run.py --case ./my_optimization --max-iter 100
+```
+
+**See** `examples/synthetic_simple/run_simple_api.py` for a complete minimal template.
+
+---
+
+## Advanced Configuration
+
+### Available CLI Options
+
+```bash
+python run.py --case <directory> [options]
+
+Core options:
+  --run-id N              Run identifier for model/data directories
+  --max-iter N            Maximum BAX iterations (default: 100)
+  --n-sampling N          Points sampled per iteration (default: 50)
+  --n-init N              Initial training samples (default: 100)
+  --device {auto,cuda,cpu} Compute device (default: auto)
+  --seed N                Random seed
+
+Neural network:
+  --nn-neurons N          Network width (default: 800)
+  --nn-lr FLOAT           Learning rate (default: 1e-4)
+  --nn-epochs N           Initial training epochs (default: 150)
+  --nn-iter-epochs N      Per-iteration epochs (default: 10)
+  --nn-batch-size N       Batch size (default: 1000)
+
+Training:
+  --test-ratio FLOAT      Test set ratio (default: 0.05)
+  --weight-new FLOAT      Weight for new data points (default: 10)
+  --snapshot / --no-snapshot  Save models each iteration
+```
+
+### Manual API (Advanced Users)
+
+For full control over initialization, normalization, and configuration, use the `BAXOpt` class directly:
+
+```python
+from bax_core import BAXOpt
+import da_NN as dann
+
+# Manual initialization
+X_init = generate_initial_samples(1000)
+Y0_init = oracle_obj1(X_init)
+Y1_init = oracle_obj2(X_init)
+
+# Manual normalization
 X_mu, X_std = dann.get_norm(X_init)
 norm = lambda X: dann.normalize(X.copy(), X_mu, X_std)
 
@@ -157,86 +237,35 @@ opt = BAXOpt(
     algo=make_algo(),
     fn_oracle=[oracle_obj1, oracle_obj2],
     norm=[norm, norm],
-    init=[lambda: (X_init, Y1_init), lambda: (X_init, Y2_init)],
-    device='auto'
+    init=[lambda: (X_init, Y0_init), lambda: (X_init, Y1_init)],
+    device='cuda'
 )
 
-# Run optimization
+# Configure
+opt.n_sampling = 50
+opt.n_neur = 800
+opt.epochs = 150
+
+# Run
 opt.run_acquisition(max_iterations=100)
 ```
 
----
-
-## Examples
-
-### 1. Synthetic Problem (Minimal)
-
-Simple analytical functions demonstrating the API:
-
-```bash
-cd examples/synthetic
-python run_synthetic.py
-```
-
-**What it shows:**
-- Minimal 5-function implementation (~200 lines)
-- Random sampling acquisition
-- Direct pass-through objectives
-
-### 2. DAMA Problem (Full-Featured)
-
-Particle accelerator optimization with advanced features:
-
-```bash
-cd examples/dama
-python run_dama.py --run-id 3 --max-iter 100
-```
-
-**What it shows:**
-- Seed augmentation in oracles
-- Complex grid generation (spatial + momentum)
-- NSGA2 genetic algorithm + boundary sampling
-- Data transformations and resource management
-
-See `examples/README.md` for detailed API documentation.
-
----
-
-## Documentation
-
-- **[Framework Guide](docs/FRAMEWORK_GUIDE.md)** - Complete user guide with API reference
-- **[DAMA Example](docs/DAMA_EXAMPLE.md)** - Full-featured example walkthrough
-- **[Contributing](docs/CONTRIBUTING.md)** - Development guide
-- **[Examples README](examples/README.md)** - Detailed examples and patterns
-
----
-
-## How It Works
-
-### The BAX Loop
-
-1. **Train surrogates**: Neural networks learn to predict expensive simulation outputs
-2. **Run acquisition**: Use surrogates to find promising candidates (cheap!)
-3. **Query oracles**: Run actual simulations on selected points (expensive)
-4. **Update models**: Retrain surrogates with new data
-5. **Repeat**: Continue until Pareto front converges
-
-**Key insight**: Most evaluations use fast surrogate models. Only a few carefully selected points require expensive simulations.
+**See** `examples/synthetic/run_synthetic.py` for complete manual API example.
 
 ---
 
 ## When to Use BAX
 
 ✅ **Use BAX when:**
-- You have 2 competing objectives to optimize
-- Your simulations are expensive (minutes to hours each)
+- You have multiple competing objectives to optimize
+- Your simulations are expensive (minutes to hours per evaluation)
 - You want to find the Pareto front efficiently
 - You can provide ~100-1000 initial samples for training
 
 ❌ **Don't use BAX when:**
-- Simulations are cheap (use traditional MOO algorithms)
-- You have >2 objectives (BAX is designed for 2)
+- Simulations are cheap (<1 second) - use traditional MOO algorithms
 - You can't provide initial training data
+- You need real-time optimization
 
 ---
 
@@ -245,64 +274,32 @@ See `examples/README.md` for detailed API documentation.
 ```
 DAMA-BAX/
 ├── core/                      # Generic BAX framework
-│   ├── bax_core.py           # Main optimizer (BAXOpt class)
-│   ├── da_NN.py              # Neural network architecture
-│   └── config.py             # Configuration utilities
+│   ├── bax_core.py           # Main optimizer + simplified API
+│   └── da_NN.py              # Neural network architecture
 ├── examples/                  # Example implementations
-│   ├── dama/                 # Particle accelerator optimization
-│   └── synthetic/            # Minimal example
-├── docs/                      # Documentation
-│   ├── FRAMEWORK_GUIDE.md    # User guide
-│   ├── DAMA_EXAMPLE.md       # Example walkthrough
+│   ├── synthetic_simple/     # Starter example
+│   ├── synthetic/            # Intermediate example (grid expansion)
+│   └── dama/                 # Advanced example (accelerator optimization)
+├── docs/                      # Detailed documentation
+│   ├── FRAMEWORK_GUIDE.md    # Complete user guide
+│   ├── API_QUICK_REFERENCE.md # API reference
+│   ├── DAMA_EXAMPLE.md       # DAMA walkthrough
 │   └── CONTRIBUTING.md       # Development guide
-├── pyproject.toml            # Package configuration
+├── run.py                     # Unified runner (recommended!)
 ├── verify.py                 # Installation checker
 └── README.md                 # This file
 ```
 
 ---
 
-## Configuration Options
+## Documentation
 
-```python
-opt = BAXOpt(...)
-
-# Sampling
-opt.n_sampling = 50              # Points per iteration
-
-# Neural Network
-opt.n_neur = 800                 # Network width
-opt.dropout = 0.1                # Dropout rate
-opt.lr = 1e-4                    # Learning rate
-opt.batch_size = 1000            # Batch size
-
-# Training
-opt.epochs = 150                 # Initial training epochs
-opt.iter_epochs = 10             # Per-iteration training
-opt.weight_new_pts = 10          # Weight for new data
-
-# Checkpointing
-opt.snapshot = True              # Save models each iteration
-opt.model_root = './models/'     # Model save directory
-```
-
----
-
-## Dependencies
-
-**Core ML:**
-- numpy, scipy, matplotlib, scikit-learn, tqdm
-- torch (PyTorch for neural networks)
-
-**Optimization:**
-- pymoo (NSGA2 genetic algorithm)
-- pyDOE (Latin Hypercube Sampling)
-
-**Optional:**
-- umap-learn (dimensionality reduction for visualization)
-- at (PyAT - only for DAMA accelerator example)
-
-All dependencies are specified in `pyproject.toml`.
+- **[Framework Guide](docs/FRAMEWORK_GUIDE.md)** - Complete guide with patterns and best practices
+- **[API Reference](docs/API_QUICK_REFERENCE.md)** - Quick API reference for both APIs
+- **[Examples](examples/README.md)** - Detailed examples documentation
+- **[DAMA Example](docs/DAMA_EXAMPLE.md)** - Advanced full-featured example
+- **[Migration Guide](DAMA_MIGRATION_GUIDE.md)** - Migrating to unified API
+- **[Contributing](docs/CONTRIBUTING.md)** - Development guidelines
 
 ---
 
@@ -310,29 +307,38 @@ All dependencies are specified in `pyproject.toml`.
 
 | Problem | Solution |
 |---------|----------|
-| **Out of memory** | Reduce `opt.batch_size` or `opt.n_sampling` |
-| **Training too slow** | Use GPU (`device='cuda'`) or reduce `opt.n_neur` |
-| **Bad Pareto front** | Increase `opt.n_sampling` or `max_iterations` |
-| **Module not found** | Add `sys.path.insert(0, 'path/to/core')` |
-| **NaN in training** | Check data normalization, reduce learning rate |
+| **Out of memory** | Reduce `--nn-batch-size 500` or `--n-sampling 25` |
+| **Training too slow** | Use GPU `--device cuda` or reduce `--nn-neurons 400` |
+| **Bad Pareto front** | Increase `--n-sampling` or `--max-iter` |
+| **Module not found** | Activate venv: `source .venv/bin/activate` |
+| **NaN in training** | Reduce learning rate `--nn-lr 1e-5` or check data normalization |
 
-See `docs/FRAMEWORK_GUIDE.md` for more troubleshooting tips.
+**Still stuck?** Check `docs/FRAMEWORK_GUIDE.md` for detailed troubleshooting.
 
 ---
 
 ## Automatic Resume
 
-If interrupted, simply restart with the same command. BAX automatically:
-- Detects the latest checkpoint
-- Reloads models and data
-- Continues from where it left off
+BAX automatically resumes from checkpoints if interrupted:
 
 ```bash
 # Run initially
-python your_optimization.py
+python run.py --case examples/dama --run-id 3
 
-# Interrupted? Just re-run
-python your_optimization.py  # Resumes automatically
+# Interrupted? Just re-run with same parameters
+python run.py --case examples/dama --run-id 3  # Resumes automatically!
+```
+
+---
+
+## SLURM Cluster Usage
+
+```bash
+# Edit job.sh with your cluster settings, then:
+sbatch job.sh
+
+# Or with custom case:
+CASE_DIR=examples/synthetic RUN_ID=1 MAX_ITER=50 sbatch job.sh
 ```
 
 ---
@@ -355,54 +361,15 @@ MIT License - see LICENSE file for details
 
 ## Support
 
+- **Getting Started**: This README and `examples/synthetic_simple/`
 - **Documentation**: See `docs/` directory
-- **Examples**: See `examples/` directory
+- **Examples**: See `examples/` directory for working implementations
 - **Issues**: Open an issue on GitHub
-- **Questions**: Check `docs/FRAMEWORK_GUIDE.md` or examples
+- **Advanced Questions**: Check `docs/FRAMEWORK_GUIDE.md`
 
----
-
-## Quick Reference
-
-**Create your optimization in 3 steps:**
-
-1. **Implement 5 functions**: 2 oracles + 2 objectives + 1 algorithm
-2. **Generate initial data**: ~1000 samples from your simulations
-3. **Run BAX**: Create `BAXOpt` instance and call `run_acquisition()`
-
-**See `examples/synthetic/run_synthetic.py` for a complete minimal example.**
-
----
-
-## What Makes BAX Different?
-
-- **Designed for expensive simulations**: Most MOO algorithms assume cheap evaluations
-- **Learns simulation behavior**: Surrogates replace simulations after initial training
-- **Acquisition-based**: Strategically selects which points to evaluate
-- **Production-ready**: Automatic checkpointing, resuming, and error recovery
-- **Simple API**: Just 5 functions, no complex class hierarchies
-
----
-
-## Comparison
-
-| Method | Evaluations Needed | Best For |
-|--------|-------------------|----------|
-| **NSGA2 (traditional)** | 10,000+ | Cheap simulations |
-| **Bayesian Optimization** | 100-1000 | Single objective |
-| **BAX (this framework)** | 100-1000 | Multi-objective + expensive |
-
-BAX combines the efficiency of Bayesian optimization with multi-objective capability.
-
----
-
-## Getting Started
-
-1. **Install**: `uv sync` or `pip install -e .`
-2. **Verify**: `python verify.py`
-3. **Learn API**: Read `examples/synthetic/run_synthetic.py`
-4. **Understand patterns**: Read `docs/FRAMEWORK_GUIDE.md`
-5. **Implement your problem**: Follow the 5-function template
-6. **Run and iterate**: Monitor convergence, tune parameters
-
-**Next steps:** See `docs/FRAMEWORK_GUIDE.md` for detailed guide and `examples/` for working implementations.
+**Quick tips:**
+1. Start with `synthetic_simple` example
+2. Read the minimal code example above
+3. Try running with different `--n-sampling` and `--max-iter`
+4. Check `docs/FRAMEWORK_GUIDE.md` for patterns and best practices
+5. Use `examples/dama/` as reference for complex applications
