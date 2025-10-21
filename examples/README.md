@@ -24,7 +24,7 @@ opt, results = run_bax_optimization(
 - Neural network configuration
 - Model training and optimization loop
 
-See `synthetic_simple/run_simple_api.py` or `synthetic/run_synthetic_api.py` for complete examples.
+See `synthetic_simple/run.py` or `synthetic/run.py` for complete examples.
 
 ## Overview
 
@@ -97,17 +97,19 @@ def oracle_obj1(X):
 
     Returns:
     --------
-    Y : np.ndarray, shape (n_samples,) or (n_samples, n_outputs)
+    Y : np.ndarray, shape (n_samples, 1)
         Intermediate results (e.g., survival turns, physical measurements)
+        CRITICAL: MUST return (n, 1) shape!
     """
     # Run your expensive simulation here
     Y = your_expensive_simulation(X)
-    return Y
+    # CRITICAL: Must return (n, 1) shape!
+    return Y.reshape(-1, 1)
 
 def oracle_obj2(X):
     """Similar for objective 2"""
     Y = your_other_simulation(X)
-    return Y
+    return Y.reshape(-1, 1)  # CRITICAL: (n, 1) shape!
 ```
 
 **Key points:**
@@ -120,7 +122,7 @@ def oracle_obj2(X):
 Objective functions convert surrogate model predictions into actual objective values you want to optimize.
 
 ```python
-def make_obj1(x, fn_model):
+def objective_obj1(x, fn_model):
     """
     Convert model predictions to objective 1 values.
 
@@ -130,13 +132,14 @@ def make_obj1(x, fn_model):
         Candidate configurations
     fn_model : function
         Surrogate model that predicts intermediate results
+        Returns (n, 1) shaped predictions
 
     Returns:
     --------
     obj : np.ndarray, shape (n, 1)
         Objective values
     """
-    # Get predictions from surrogate model
+    # Get predictions from surrogate model (already (n, 1) shape!)
     predictions = fn_model(x)
 
     # Transform predictions to objective
@@ -145,9 +148,9 @@ def make_obj1(x, fn_model):
 
     return objectives
 
-def make_obj2(x, fn_model):
+def objective_obj2(x, fn_model):
     """Similar for objective 2"""
-    predictions = fn_model(x)
+    predictions = fn_model(x)  # Already (n, 1), no transpose needed!
     objectives = calculate_other_objective(predictions)
     return objectives
 ```
@@ -162,38 +165,33 @@ def make_obj2(x, fn_model):
 The algorithm function implements your acquisition strategy - it decides which points to query next.
 
 ```python
-def make_algo():
-    """Create acquisition algorithm."""
+def algo(fn_model_list):
+    """
+    Select next batch of candidates.
 
-    def algo(fn_model_list):
-        """
-        Select next batch of candidates.
+    Parameters:
+    -----------
+    fn_model_list : list of functions
+        Surrogate models [fn_model1, fn_model2]
 
-        Parameters:
-        -----------
-        fn_model_list : list of functions
-            Surrogate models [fn_model1, fn_model2]
+    Returns:
+    --------
+    X_candidates_obj1 : np.ndarray
+        Candidates for objective 1
+    X_candidates_obj2 : np.ndarray
+        Candidates for objective 2
+    """
+    fn_model1, fn_model2 = fn_model_list
 
-        Returns:
-        --------
-        X_candidates_obj1 : np.ndarray
-            Candidates for objective 1
-        X_candidates_obj2 : np.ndarray
-            Candidates for objective 2
-        """
-        fn_model1, fn_model2 = fn_model_list
+    # Your acquisition strategy here
+    # Could use: GA, random sampling, uncertainty sampling, etc.
+    candidates = your_optimization_method(fn_model1, fn_model2)
 
-        # Your acquisition strategy here
-        # Could use: GA, random sampling, uncertainty sampling, etc.
-        candidates = your_optimization_method(fn_model1, fn_model2)
+    # Return candidates for each objective
+    X_obj1 = extract_candidates_for_obj1(candidates)
+    X_obj2 = extract_candidates_for_obj2(candidates)
 
-        # Return candidates for each objective
-        X_obj1 = extract_candidates_for_obj1(candidates)
-        X_obj2 = extract_candidates_for_obj2(candidates)
-
-        return X_obj1, X_obj2
-
-    return algo
+    return X_obj1, X_obj2
 ```
 
 **Key points:**
@@ -251,8 +249,7 @@ python run.py --case examples/synthetic_simple
 **Standalone execution:**
 ```bash
 cd examples/synthetic_simple
-python run_simple_api.py       # Simplified API (~180 lines)
-python run_simple.py           # Manual API (~260 lines)
+python run.py                  # Simplified API (~200 lines)
 ```
 
 **What it does:**
@@ -272,8 +269,7 @@ python run.py --case examples/synthetic --max-iter 5
 **Standalone execution:**
 ```bash
 cd examples/synthetic
-python run_synthetic_api.py    # Simplified API (~340 lines)
-python run_synthetic.py        # Manual API (~470 lines)
+python run.py                  # Simplified API (~350 lines)
 ```
 
 **What it does:**
@@ -293,8 +289,7 @@ python run.py --case examples/dama --run-id 3 --max-iter 100
 **Standalone execution:**
 ```bash
 cd examples/dama
-python run_dama_api.py         # Simplified API
-python run_dama.py --run-id 3  # Manual API
+python run.py --run-id 3       # Simplified API
 ```
 
 **What it does:**
@@ -316,7 +311,8 @@ def oracle(X: np.ndarray) -> np.ndarray:
         X: Input configurations, shape (n_samples, n_dims)
 
     Returns:
-        Y: Simulation outputs, shape (n_samples,) or (n_samples, n_outputs)
+        Y: Simulation outputs, shape (n_samples, 1)
+           CRITICAL: MUST return (n, 1) shape!
     """
 ```
 
@@ -423,20 +419,18 @@ def make_obj1(problem):
 You can implement any acquisition strategy:
 
 ```python
-def make_algo():
-    def algo(fn_model_list):
-        # Strategy 1: Uncertainty sampling
-        candidates = sample_high_uncertainty_regions(fn_model_list)
+def algo(fn_model_list):
+    """Your acquisition strategy."""
+    # Strategy 1: Uncertainty sampling
+    candidates = sample_high_uncertainty_regions(fn_model_list)
 
-        # Strategy 2: Boundary sampling
-        # candidates = sample_near_boundaries(fn_model_list)
+    # Strategy 2: Boundary sampling
+    # candidates = sample_near_boundaries(fn_model_list)
 
-        # Strategy 3: GA optimization
-        # candidates = genetic_algorithm(fn_model_list)
+    # Strategy 3: GA optimization
+    # candidates = genetic_algorithm(fn_model_list)
 
-        return candidates_obj1, candidates_obj2
-
-    return algo
+    return candidates_obj1, candidates_obj2
 ```
 
 ## File Structure for Custom Problems

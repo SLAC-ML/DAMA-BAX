@@ -65,13 +65,13 @@ DAMA-BAX/
 │   └── config.py         # Configuration management
 ├── examples/              # Example implementations
 │   ├── dama/             # Full-featured accelerator example
-│   │   ├── run_dama.py
+│   │   ├── run.py
 │   │   ├── dama_oracles.py
 │   │   ├── dama_objectives.py
 │   │   ├── dama_algo.py
 │   │   └── resources/    # DAMA-specific data
 │   └── synthetic/        # Minimal example
-│       └── run_synthetic.py
+│       └── run.py
 ├── docs/                  # Documentation
 │   ├── FRAMEWORK_GUIDE.md
 │   ├── DAMA_EXAMPLE.md
@@ -185,11 +185,11 @@ Currently, testing is done manually:
 ```bash
 # Test synthetic example
 cd examples/synthetic
-python run_synthetic.py
+python run.py --case examples/synthetic
 
 # Test DAMA example
 cd examples/dama
-python run_dama.py --run-id test --max-iter 5
+python run.py --case examples/dama --run-id test --max-iter 5
 ```
 
 ### Future: Automated Testing
@@ -263,7 +263,7 @@ def make_algo(config):
     return algo
 ```
 
-**`run_your_problem.py`**
+**`run.py`** (REQUIRED naming convention)
 ```python
 """Main entry point for your problem."""
 
@@ -308,7 +308,7 @@ opt.run_acquisition(max_iterations=100)
 
 ```bash
 cd examples/your_problem
-python run_your_problem.py
+python run.py --case ./your_problem
 ```
 
 ### Step 4: Document Your Example
@@ -323,7 +323,7 @@ Brief description of the optimization problem.
 ## Usage
 
 \`\`\`bash
-python run_your_problem.py
+python run.py --case ./your_problem
 \`\`\`
 
 ## Problem Description

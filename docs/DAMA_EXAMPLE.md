@@ -44,7 +44,10 @@ If you have pretrained models in `examples/dama/resources/`:
 
 ```bash
 cd examples/dama
-python run_dama.py --run-id 3 --max-iter 100
+python run.py --case examples/dama --run-id 3 --max-iter 100
+
+# Or run directly from dama directory:
+cd examples/dama && python run.py --run-id 3 --max-iter 100
 ```
 
 ### Option 2: Start from Scratch (Advanced)
@@ -53,7 +56,7 @@ Generate initial data and train models from scratch:
 
 ```bash
 cd examples/dama
-python run_dama.py --no-pretrained --run-id 0
+python run.py --case examples/dama --no-pretrained --run-id 0
 ```
 
 This will:
@@ -67,7 +70,7 @@ This will:
 ### Command-Line Options
 
 ```bash
-python run_dama.py --help
+python run.py --case examples/dama --help
 
 Options:
   --run-id RUN_ID              Run identifier (default: 3)
@@ -85,7 +88,7 @@ Options:
 
 ```
 examples/dama/
-├── run_dama.py            # Main entry point
+├── run.py                 # Main entry point (unified naming)
 ├── dama_oracles.py        # Oracle functions (DA/MA simulations)
 ├── dama_objectives.py     # Objective functions (aperture calculations)
 ├── dama_algo.py           # Algorithm (NSGA2 + boundary sampling)
@@ -105,7 +108,7 @@ examples/dama/
 
 ## Configuration
 
-All parameters are at the top of `run_dama.py` (lines 50-105):
+All parameters are at the top of `run.py` (lines 50-105):
 
 ### Essential Parameters
 
@@ -541,7 +544,7 @@ The framework automatically resumes from the latest checkpoint:
 ```bash
 # If models/run_3/ has danet_l5_f.pt and manet_l5_f.pt,
 # the script will resume from iteration 6
-python run_dama.py --run-id 3
+python run.py --case examples/dama --run-id 3
 ```
 
 ---

@@ -93,11 +93,12 @@ def oracle_obj1(X):
 
     Returns:
     --------
-    Y : np.ndarray, shape (n_samples,) or (n_samples, 1)
+    Y : np.ndarray, shape (n_samples, 1)
         Simulation outputs
+        CRITICAL: MUST return (n, 1) shape!
     """
     Y = expensive_simulation(X)
-    return Y
+    return Y.reshape(-1, 1)  # Always reshape to (n, 1)!
 ```
 
 ### Objective Functions
@@ -112,43 +113,38 @@ def objective_obj1(x, fn_model):
     x : np.ndarray, shape (n, n_dims)
         Candidate configurations
     fn_model : function
-        Surrogate model that predicts intermediate results
+        Surrogate model that returns (n, 1) predictions
 
     Returns:
     --------
     obj : np.ndarray, shape (n, 1)
         Objective values
     """
-    predictions = fn_model(x)  # (1, n)
-    obj = calculate_objective(predictions.T)  # (n, 1)
+    predictions = fn_model(x)  # (n, 1) - no transpose needed!
+    obj = calculate_objective(predictions)  # (n, 1)
     return obj
 ```
 
 ### Algorithm Function
 
 ```python
-def make_algo():
-    """Create acquisition algorithm."""
+def algo(fn_model_list):
+    """
+    Select next candidates.
 
-    def algo(fn_model_list):
-        """
-        Select next candidates.
+    Parameters:
+    -----------
+    fn_model_list : list of functions
+        Surrogate models [fn_model1, fn_model2, ...]
 
-        Parameters:
-        -----------
-        fn_model_list : list of functions
-            Surrogate models [fn_model1, fn_model2, ...]
-
-        Returns:
-        --------
-        X_candidates_obj1, X_candidates_obj2, ... : np.ndarray
-            Candidates for each objective
-        """
-        # Your acquisition strategy
-        candidates = your_optimization(fn_model_list)
-        return candidates_obj1, candidates_obj2
-
-    return algo
+    Returns:
+    --------
+    X_candidates_obj1, X_candidates_obj2, ... : np.ndarray
+        Candidates for each objective
+    """
+    # Your acquisition strategy
+    candidates = your_optimization(fn_model_list)
+    return candidates_obj1, candidates_obj2
 ```
 
 ### Expansion Functions (Pattern B only)
@@ -309,21 +305,30 @@ opt.run_acquisition(n_iters=100, verbose=True)
 
 ## Examples
 
-| Example | API | Pattern | Lines | Description |
-|---------|-----|---------|-------|-------------|
-| `synthetic_simple/run_simple_api.py` | Simplified | A | 180 | Simplest example |
-| `synthetic_simple/run_simple.py` | Manual | A | 260 | Manual setup |
-| `synthetic/run_synthetic_api.py` | Simplified | B | 340 | Grid expansion |
-| `synthetic/run_synthetic.py` | Manual | B | 470 | Manual grid setup |
-| `dama/run_dama.py` | Manual | B | 600+ | Full DAMA example |
+| Example | Pattern | Lines | Description |
+|---------|---------|-------|-------------|
+| `synthetic_simple/run.py` | A | ~200 | Simplest example - direct evaluation |
+| `synthetic/run.py` | B | ~350 | Grid expansion pattern |
+| `dama/run.py` | B | ~400 | Full DAMA accelerator example |
+
+**Note**: All examples now use unified `run.py` naming convention.
 
 ---
 
 ## Common Issues
 
+**Q: "Shape mismatch errors"**
+- **CRITICAL**: Oracles MUST return shape `(n, 1)`, not `(n,)`
+- Always use `.reshape(-1, 1)` before returning from oracles
+- `fn_model` returns `(n, 1)`, objectives receive and return `(n, 1)`
+
 **Q: "Input dimensions don't match"**
 - For Pattern A: Ensure oracle and objective use same X dimensions
-- For Pattern B: Provide `expansion_funcs` and ensure objective expands correctly
+- For Pattern B: Expansion logic goes inside objective functions
+
+**Q: "Training loss is very high (>100)"**
+- Check if oracle outputs are normalized to [0, 1] range
+- Neural networks use sigmoid output by default, constraining to [0, 1]
 
 **Q: "How do I use custom model names?"**
 ```python
@@ -334,10 +339,6 @@ run_bax_optimization(..., model_names=['my_model1', 'my_model2'])
 ```python
 run_bax_optimization(..., n_init=[100, 50])  # 100 for obj1, 50 for obj2
 ```
-
-**Q: "How do I resume from checkpoint?"**
-- Use manual API with `get_curr_loop_num()` (see `dama/run_dama.py`)
-- Simplified API doesn't support resume yet
 
 ---
 
