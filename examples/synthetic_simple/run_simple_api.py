@@ -29,17 +29,21 @@ def oracle_obj1(X):
     """
     Oracle for objective 1: Sphere function.
 
+    IMPORTANT: Normalized to [0, 1] range to work with sigmoid output activation.
+    Neural networks by default use sigmoid(x) which constrains outputs to [0, 1].
+
     Parameters:
     -----------
     X : np.ndarray, shape (n, 2)
-        Input configurations
+        Input configurations in [0, 1]
 
     Returns:
     --------
     Y : np.ndarray, shape (n,)
-        Function values
+        Function values normalized to ~[0, 1]
     """
     Y = np.sum(X**2, axis=1)
+    Y = Y / 2.0  # Normalize: max is ~2 for X in [0,1], so divide by 2 → [0, 1]
     Y += 0.01 * np.random.randn(X.shape[0])  # Add noise
     return Y
 
@@ -48,20 +52,24 @@ def oracle_obj2(X):
     """
     Oracle for objective 2: Rosenbrock function.
 
+    IMPORTANT: Normalized to [0, 1] range to work with sigmoid output activation.
+    Neural networks by default use sigmoid(x) which constrains outputs to [0, 1].
+
     Parameters:
     -----------
     X : np.ndarray, shape (n, 2)
-        Input configurations
+        Input configurations in [0, 1]
 
     Returns:
     --------
     Y : np.ndarray, shape (n,)
-        Function values
+        Function values normalized to ~[0, 1]
     """
     x1 = X[:, 0]
     x2 = X[:, 1]
     Y = (1 - x1)**2 + 100 * (x2 - x1**2)**2
-    Y += 0.1 * np.random.randn(X.shape[0])  # Add noise
+    Y = Y / 100.0  # Normalize: max is ~100 for X in [0,1], so divide by 100 → [0, 1]
+    Y += 0.01 * np.random.randn(X.shape[0])  # Add noise
     return Y
 
 
@@ -113,41 +121,35 @@ def objective_obj2(x, fn_model):
 # STEP 3: Define Algorithm Function
 # ============================================================================
 
-def make_algo():
+def algo(fn_model_list):
     """
-    Create a simple random sampling acquisition algorithm.
+    Simple random sampling acquisition algorithm.
+
+    Parameters:
+    -----------
+    fn_model_list : list of functions
+        [fn_model1, fn_model2] - surrogate models
+
+    Returns:
+    --------
+    X_obj1, X_obj2 : np.ndarray
+        Candidates for each objective
     """
-    def algo(fn_model_list):
-        """
-        Select next candidates using random sampling.
+    # Generate random candidates
+    n_candidates = 200
+    X_candidates = np.random.rand(n_candidates, 2)
 
-        Parameters:
-        -----------
-        fn_model_list : list of functions
-            [fn_model1, fn_model2] - surrogate models
+    # Evaluate with objective functions
+    obj1_vals = objective_obj1(X_candidates, fn_model_list[0])
+    obj2_vals = objective_obj2(X_candidates, fn_model_list[1])
 
-        Returns:
-        --------
-        X_obj1, X_obj2 : np.ndarray
-            Candidates for each objective
-        """
-        # Generate random candidates
-        n_candidates = 200
-        X_candidates = np.random.rand(n_candidates, 2)
+    # Select diverse points
+    n_select = 10
+    idx = np.linspace(0, len(X_candidates)-1, n_select, dtype=int)
 
-        # Evaluate with objective functions
-        obj1_vals = objective_obj1(X_candidates, fn_model_list[0])
-        obj2_vals = objective_obj2(X_candidates, fn_model_list[1])
+    X_selected = X_candidates[idx]
 
-        # Select diverse points
-        n_select = 10
-        idx = np.linspace(0, len(X_candidates)-1, n_select, dtype=int)
-
-        X_selected = X_candidates[idx]
-
-        return X_selected, X_selected
-
-    return algo
+    return X_selected, X_selected
 
 
 # ============================================================================
@@ -186,7 +188,7 @@ def get_bax_config(args):
     return {
         'oracles': [oracle_obj1, oracle_obj2],
         'objectives': [objective_obj1, objective_obj2],
-        'algorithm': make_algo(),
+        'algorithm': algo,
         'model_root': model_root,
         # Can optionally specify defaults for BAX params (overridden by CLI):
         # 'n_init': 50,

@@ -56,7 +56,7 @@ You should see:
 - BAX iterations with Pareto front updates
 - Final results saved to `./models_simple/`
 
-**Note**: net_1 (Rosenbrock) may show higher loss values (100-900) initially - this is normal as Rosenbrock produces larger values than sphere. Loss should decrease during training.
+**Note**: Both networks should show reasonable loss values (<10) after normalization. Loss will decrease during training.
 
 ---
 
@@ -70,12 +70,15 @@ import numpy as np
 
 # 1. Define oracle functions (your expensive simulations)
 def oracle_obj1(X):
-    """Sphere function: sum of squares."""
-    return np.sum(X**2, axis=1).reshape(-1, 1)
+    """Sphere function, normalized to [0, 1] for sigmoid output."""
+    Y = np.sum(X**2, axis=1)
+    return (Y / 2.0).reshape(-1, 1)  # Normalize to ~[0, 1]
 
 def oracle_obj2(X):
-    """Rosenbrock function."""
-    return np.sum(100*(X[:, 1:] - X[:, :-1]**2)**2 + (1 - X[:, :-1])**2, axis=1).reshape(-1, 1)
+    """Rosenbrock function, normalized to [0, 1] for sigmoid output."""
+    x1, x2 = X[:, 0], X[:, 1]
+    Y = (1 - x1)**2 + 100 * (x2 - x1**2)**2
+    return (Y / 100.0).reshape(-1, 1)  # Normalize to ~[0, 1]
 
 # 2. Define objective functions (convert predictions → objectives)
 def objective_obj1(x, fn_model):
@@ -85,22 +88,22 @@ def objective_obj2(x, fn_model):
     return fn_model(x).T
 
 # 3. Define algorithm (acquisition strategy)
-def make_algo():
-    def algo(fn_model_list):
-        # Random sampling (simple but effective!)
-        candidates = np.random.rand(50, 2)
-        return candidates, candidates
-    return algo
+def algo(fn_model_list):
+    # Random sampling (simple but effective!)
+    candidates = np.random.rand(50, 2)
+    return candidates, candidates
 
 # That's it! Run optimization:
 opt, results = run_bax_optimization(
     oracles=[oracle_obj1, oracle_obj2],
     objectives=[objective_obj1, objective_obj2],
-    algorithm=make_algo(),
-    n_init=50,           # Initial samples (automatic)
+    algorithm=algo,  # No wrapper needed!
+    n_init=50,       # Initial samples (automatic)
     max_iterations=100
 )
 ```
+
+**Important**: Neural networks use sigmoid output activation by default, constraining predictions to [0, 1]. Make sure your oracle functions return values in this range (normalize if needed).
 
 **Key insight:** BAX trains cheap surrogate models to replace expensive oracles, then uses them to intelligently select the next points to evaluate.
 
@@ -157,11 +160,14 @@ from bax_core import run_bax_optimization
 
 def oracle_obj1(X):
     # Your expensive simulation here
-    return your_simulation_1(X)
+    Y = your_simulation_1(X)
+    # IMPORTANT: Normalize to [0, 1] for sigmoid output!
+    return Y / max_expected_value_1
 
 def oracle_obj2(X):
     # Another expensive simulation
-    return your_simulation_2(X)
+    Y = your_simulation_2(X)
+    return Y / max_expected_value_2  # Normalize!
 
 def objective_obj1(x, fn_model):
     predictions = fn_model(x)
@@ -171,19 +177,17 @@ def objective_obj2(x, fn_model):
     predictions = fn_model(x)
     return your_other_metric(predictions)
 
-def make_algo():
-    def algo(fn_model_list):
-        # Your acquisition strategy (GA, Bayesian opt, random, etc.)
-        candidates = your_optimization_method(fn_model_list)
-        return candidates, candidates
-    return algo
+def algo(fn_model_list):
+    # Your acquisition strategy (GA, Bayesian opt, random, etc.)
+    candidates = your_optimization_method(fn_model_list)
+    return candidates, candidates
 
 def get_bax_config(args):
     """Entry point for unified runner."""
     return {
         'oracles': [oracle_obj1, oracle_obj2],
         'objectives': [objective_obj1, objective_obj2],
-        'algorithm': make_algo(),
+        'algorithm': algo,
         'model_root': f'./models_run_{args.run_id}/' if args.run_id else './models/',
     }
 ```
