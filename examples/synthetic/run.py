@@ -50,7 +50,7 @@ def oracle_obj1(X0):
 
     Returns:
     --------
-    Y0 : np.ndarray, shape (n×n_radial,)
+    Y0 : np.ndarray, shape (n×n_radial, 1)
         Function values at each grid point
     """
     x1 = X0[:, 0]
@@ -63,7 +63,7 @@ def oracle_obj1(X0):
     # Add noise
     Y0 += 0.01 * np.random.randn(X0.shape[0])
 
-    return Y0
+    return Y0.reshape(-1, 1)  # Return (n×n_radial, 1) shape
 
 
 def oracle_obj2(X1):
@@ -79,7 +79,7 @@ def oracle_obj2(X1):
 
     Returns:
     --------
-    Y1 : np.ndarray, shape (n×n_angular,)
+    Y1 : np.ndarray, shape (n×n_angular, 1)
         Function values at each grid point
     """
     x1 = X1[:, 0]
@@ -96,7 +96,7 @@ def oracle_obj2(X1):
     # Add noise
     Y1 += 0.1 * np.random.randn(X1.shape[0])
 
-    return Y1
+    return Y1.reshape(-1, 1)  # Return (n×n_angular, 1) shape
 
 
 # ============================================================================
@@ -135,10 +135,10 @@ def objective_obj1(x, fn_model):
     X0 = np.hstack([x_repeated, radii_tiled])  # (n×n_radial, 3)
 
     # Predict with surrogate
-    Y0_pred = fn_model(X0)  # (1, n×n_radial)
+    Y0_pred = fn_model(X0)  # (n×n_radial, 1)
 
     # Reshape and aggregate
-    Y0_pred = Y0_pred.T.reshape(n, N_RADIAL_GRID)  # (n, n_radial)
+    Y0_pred = Y0_pred.reshape(n, N_RADIAL_GRID)  # (n, n_radial)
     obj = Y0_pred.mean(axis=1, keepdims=True)  # (n, 1)
 
     return obj
@@ -176,10 +176,10 @@ def objective_obj2(x, fn_model):
     X1 = np.hstack([x_repeated, angles_tiled])  # (n×n_angular, 3)
 
     # Predict with surrogate
-    Y1_pred = fn_model(X1)  # (1, n×n_angular)
+    Y1_pred = fn_model(X1)  # (n×n_angular, 1)
 
     # Reshape and aggregate
-    Y1_pred = Y1_pred.T.reshape(n, N_ANGULAR_GRID)  # (n, n_angular)
+    Y1_pred = Y1_pred.reshape(n, N_ANGULAR_GRID)  # (n, n_angular)
     obj = Y1_pred.mean(axis=1, keepdims=True)  # (n, 1)
 
     return obj

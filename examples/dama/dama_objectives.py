@@ -56,12 +56,12 @@ def make_DA_objective(problem):
         X = dass.X_to_train_shape(XX)
 
         # Get predictions from surrogate model
-        Y = fn(X)
+        Y = fn(X)  # (n_grid, 1)
 
         # Convert predictions to DA objective
         da_thresh_use = 1 if strict else problem._da_thresh
         obj_pred, _ = dass.pred_to_obj(
-            Y.T, problem.rr_xiaobiao, problem.angles_xiaobiao,
+            Y, problem.rr_xiaobiao, problem.angles_xiaobiao,
             obj_scaled=None,
             da_thresh=da_thresh_use,
             method=problem._da_method
@@ -110,12 +110,12 @@ def make_MA_objective(problem):
         X = dass.X_to_train_shape(XX)
 
         # Get predictions from surrogate model
-        Y = fn(X)
+        Y = fn(X)  # (n_grid, 1)
 
         # Convert predictions to MA objective
         ma_thresh_use = 1 if strict else problem._ma_thresh
         obj_pred, _ = dass.pred_to_ma(
-            Y.T, problem._mm, problem._spos,
+            Y, problem._mm, problem._spos,
             obj_scaled=None,
             ma_thresh=ma_thresh_use,
             method=problem._ma_method

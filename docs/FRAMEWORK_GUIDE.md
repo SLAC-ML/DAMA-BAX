@@ -62,6 +62,49 @@ python run.py --case ./my_case  # Looks for my_case/run.py
 
 See `examples/synthetic_simple/run.py` for a template.
 
+### Shape Convention
+
+**CRITICAL**: Oracle functions must return shape `(n, 1)`, NOT `(n,)`.
+
+This ensures consistent shapes throughout the framework:
+
+```python
+# Input
+X: (n, input_dims)  # n samples, each with input_dims features
+
+# Oracle
+def oracle(X):
+    Y = expensive_simulation(X)  # Compute outputs
+    return Y.reshape(-1, 1)      # MUST return (n, 1)!
+
+# Neural network trains on (n, 1) data
+# fn_model returns (n, 1)
+
+# Objective
+def objective(x, fn_model):
+    predictions = fn_model(x)  # Receives (n, 1)
+    return predictions          # Returns (n, 1)
+```
+
+**Why this matters:**
+- Standard ML convention: (batch_size, output_dims)
+- Avoids confusing transposes
+- Enables consistent shape checking
+- Prevents subtle bugs
+
+**Common mistake:**
+```python
+# WRONG!
+def oracle(X):
+    Y = np.sum(X**2, axis=1)
+    return Y  # Shape (n,) - will cause issues!
+
+# CORRECT!
+def oracle(X):
+    Y = np.sum(X**2, axis=1)
+    return Y.reshape(-1, 1)  # Shape (n, 1) - works perfectly!
+```
+
 ---
 
 ## Quick Start

@@ -39,13 +39,13 @@ def oracle_obj1(X):
 
     Returns:
     --------
-    Y : np.ndarray, shape (n,)
+    Y : np.ndarray, shape (n, 1)
         Function values normalized to ~[0, 1]
     """
     Y = np.sum(X**2, axis=1)
     Y = Y / 2.0  # Normalize: max is ~2 for X in [0,1], so divide by 2 → [0, 1]
     Y += 0.01 * np.random.randn(X.shape[0])  # Add noise
-    return Y
+    return Y.reshape(-1, 1)  # Return (n, 1) shape
 
 
 def oracle_obj2(X):
@@ -62,7 +62,7 @@ def oracle_obj2(X):
 
     Returns:
     --------
-    Y : np.ndarray, shape (n,)
+    Y : np.ndarray, shape (n, 1)
         Function values normalized to ~[0, 1]
     """
     x1 = X[:, 0]
@@ -70,7 +70,7 @@ def oracle_obj2(X):
     Y = (1 - x1)**2 + 100 * (x2 - x1**2)**2
     Y = Y / 100.0  # Normalize: max is ~100 for X in [0,1], so divide by 100 → [0, 1]
     Y += 0.01 * np.random.randn(X.shape[0])  # Add noise
-    return Y
+    return Y.reshape(-1, 1)  # Return (n, 1) shape
 
 
 # ============================================================================
@@ -86,15 +86,14 @@ def objective_obj1(x, fn_model):
     x : np.ndarray, shape (n, 2)
         Candidate configurations
     fn_model : function
-        Surrogate model
+        Surrogate model that returns (n, 1)
 
     Returns:
     --------
     obj : np.ndarray, shape (n, 1)
         Objective values
     """
-    predictions = fn_model(x)  # (1, n)
-    return predictions.T  # (n, 1)
+    return fn_model(x)  # Already (n, 1)
 
 
 def objective_obj2(x, fn_model):
@@ -106,15 +105,14 @@ def objective_obj2(x, fn_model):
     x : np.ndarray, shape (n, 2)
         Candidate configurations
     fn_model : function
-        Surrogate model
+        Surrogate model that returns (n, 1)
 
     Returns:
     --------
     obj : np.ndarray, shape (n, 1)
         Objective values
     """
-    predictions = fn_model(x)  # (1, n)
-    return predictions.T  # (n, 1)
+    return fn_model(x)  # Already (n, 1)
 
 
 # ============================================================================

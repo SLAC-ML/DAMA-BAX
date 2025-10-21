@@ -579,6 +579,7 @@ def fn_factory(model, norm):
     --------
     fn : function
         Surrogate function X → Y_pred
+        X: (n, input_dims) → Y_pred: (n, 1)
     """
     def fn(X):
         # Normalize input
@@ -587,7 +588,7 @@ def fn_factory(model, norm):
         with torch.no_grad():
             X_tensor = torch.FloatTensor(X_n).to(model.device)
             y_pred = model(X_tensor).cpu().numpy()
-        return y_pred.T  # (1, n) format
+        return y_pred  # (n, 1) format
 
     return fn
 
@@ -656,10 +657,7 @@ class BAXOpt:
             Y = []
             for i in range(n_obj):
                 Yi = self.fn_oracle[i](X[i])
-                
-                if (len(Yi.shape) == 2) and (Yi.shape[1] == 1):
-                    Yi = Yi.flatten()
-                    
+                # Keep (n, 1) shape - no flattening!
                 Y.append(Yi)
         
         self.acquired_data.append((X, Y))  # raw X!
@@ -704,8 +702,8 @@ class BAXOpt:
                     train_test_split(Xi_n, Y[i], test_size=self.test_ratio, random_state=self.random_state)
                 self.X_train[i] = np.concatenate((self.X_train[i], X_batch_train), axis=0)
                 self.Y_train[i] = np.concatenate((self.Y_train[i], Y_batch_train), axis=0)
-                weights_train_batch = self.weight_new_pts * np.ones(self.n_sampling)
-                self.weights_train[i] = np.ones(self.weights_train[i].shape)  # reset the weight of the previous data 
+                weights_train_batch = self.weight_new_pts * np.ones((self.n_sampling, 1))  # Match (n, 1) shape
+                self.weights_train[i] = np.ones(self.weights_train[i].shape)  # reset the weight of the previous data
                 self.weights_train[i] = np.concatenate((self.weights_train[i], weights_train_batch), axis=0)
                 self.X_test[i] = np.concatenate((self.X_test[i], X_batch_test), axis=0)
                 self.Y_test[i] = np.concatenate((self.Y_test[i], Y_batch_test), axis=0)
@@ -982,9 +980,7 @@ def _auto_generate_init_data(oracles, n_init, input_dims, bounds, seed):
 
         print(f"    Evaluating oracle...")
         Y = oracle(X)
-
-        if len(Y.shape) == 2 and Y.shape[1] == 1:
-            Y = Y.flatten()
+        # Keep (n, 1) shape - no flattening!
 
         X_list.append(X)
         Y_list.append(Y)
@@ -1227,10 +1223,7 @@ def run_bax_optimization(
 
         # init_sampler returns (X_list, Y_list) directly
         X_list, Y_list = init_sampler()
-
-        # Ensure Y arrays are 1D
-        Y_list = [Y.flatten() if len(Y.shape) == 2 and Y.shape[1] == 1 else Y
-                  for Y in Y_list]
+        # Keep (n, 1) shape - no flattening!
     else:
         # Automatic initialization with LHS
         X_list, Y_list = _auto_generate_init_data(

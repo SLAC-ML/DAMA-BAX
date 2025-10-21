@@ -74,20 +74,20 @@ import numpy as np
 def oracle_obj1(X):
     """Sphere function, normalized to [0, 1] for sigmoid output."""
     Y = np.sum(X**2, axis=1)
-    return (Y / 2.0).reshape(-1, 1)  # Normalize to ~[0, 1]
+    return (Y / 2.0).reshape(-1, 1)  # MUST return (n, 1) shape!
 
 def oracle_obj2(X):
     """Rosenbrock function, normalized to [0, 1] for sigmoid output."""
     x1, x2 = X[:, 0], X[:, 1]
     Y = (1 - x1)**2 + 100 * (x2 - x1**2)**2
-    return (Y / 100.0).reshape(-1, 1)  # Normalize to ~[0, 1]
+    return (Y / 100.0).reshape(-1, 1)  # MUST return (n, 1) shape!
 
 # 2. Define objective functions (convert predictions → objectives)
 def objective_obj1(x, fn_model):
-    return fn_model(x).T  # Just pass through predictions
+    return fn_model(x)  # Already (n, 1), just return it!
 
 def objective_obj2(x, fn_model):
-    return fn_model(x).T
+    return fn_model(x)  # Already (n, 1), just return it!
 
 # 3. Define algorithm (acquisition strategy)
 def algo(fn_model_list):
@@ -104,6 +104,12 @@ opt, results = run_bax_optimization(
     max_iterations=100
 )
 ```
+
+**CRITICAL Shape Convention:**
+- **Oracle functions MUST return shape `(n, 1)`, NOT `(n,)`**
+- Use `.reshape(-1, 1)` before returning from oracles
+- This ensures consistent shapes: X: `(n, dims)` → oracle → Y: `(n, 1)`
+- Objective functions receive `(n, 1)` from `fn_model`, return `(n, 1)`
 
 **Important**: Neural networks use sigmoid output activation by default, constraining predictions to [0, 1]. Make sure your oracle functions return values in this range (normalize if needed).
 
@@ -164,12 +170,15 @@ def oracle_obj1(X):
     # Your expensive simulation here
     Y = your_simulation_1(X)
     # IMPORTANT: Normalize to [0, 1] for sigmoid output!
-    return Y / max_expected_value_1
+    Y = Y / max_expected_value_1
+    # CRITICAL: Must return (n, 1) shape!
+    return Y.reshape(-1, 1)
 
 def oracle_obj2(X):
     # Another expensive simulation
     Y = your_simulation_2(X)
-    return Y / max_expected_value_2  # Normalize!
+    Y = Y / max_expected_value_2  # Normalize!
+    return Y.reshape(-1, 1)  # CRITICAL: (n, 1) shape!
 
 def objective_obj1(x, fn_model):
     predictions = fn_model(x)
