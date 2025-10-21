@@ -27,6 +27,8 @@ python verify.py
 ### Using pip (Alternative)
 
 ```bash
+cd DAMA-BAX
+
 # Create virtual environment
 python -m venv .venv
 
@@ -53,18 +55,14 @@ python run.py --case examples/synthetic_simple --max-iter 5
 You should see:
 - Initial data generation
 - Neural network training progress (net_0 and net_1)
-- BAX iterations with Pareto front updates
-- Final results saved to `./models_simple/`
-
-**Note**: Both networks should show reasonable loss values (<10) after normalization. Loss will decrease during training.
+- BAX iterations
+- Models trained during the run saved to `./models_simple/`
 
 ---
 
 ## Minimal Code Example
 
 Here's all you need to use BAX (from `examples/synthetic_simple/run.py`):
-
-**IMPORTANT**: Your case directory must contain a file named `run.py` with `get_bax_config(args)` function.
 
 ```python
 from bax_core import run_bax_optimization
@@ -105,15 +103,11 @@ opt, results = run_bax_optimization(
 )
 ```
 
-**CRITICAL Shape Convention:**
+**Important Notes**
+- Your case directory must contain a file named `run.py` with `get_bax_config(args)` function, if you'd like to use the unified launcher
 - **Oracle functions MUST return shape `(n, 1)`, NOT `(n,)`**
-- Use `.reshape(-1, 1)` before returning from oracles
-- This ensures consistent shapes: X: `(n, dims)` → oracle → Y: `(n, 1)`
-- Objective functions receive `(n, 1)` from `fn_model`, return `(n, 1)`
-
-**Important**: Neural networks use sigmoid output activation by default, constraining predictions to [0, 1]. Make sure your oracle functions return values in this range (normalize if needed).
-
-**Key insight:** BAX trains cheap surrogate models to replace expensive oracles, then uses them to intelligently select the next points to evaluate.
+- The prediction functions (`fn_model`) are guaranteed to return shape `(n, 1)` as well
+- Neural networks use sigmoid output activation by default, constraining predictions to `[0, 1]`. Make sure your oracle functions return values in this range (normalize if needed) -- or you can modify `core/da_NN.py` to add output layer without sigmoid
 
 ---
 
@@ -124,8 +118,6 @@ opt, results = run_bax_optimization(
 | **synthetic_simple** | Starter | Basic 3-function API, random sampling | `python run.py --case examples/synthetic_simple` |
 | **synthetic** | Intermediate | Grid expansion, custom initialization | `python run.py --case examples/synthetic --max-iter 5` |
 | **dama** | Advanced | Particle accelerator optimization, NSGA2 + boundary sampling | `python run.py --case examples/dama --run-id 3 --max-iter 100` |
-
-**Try them in order!** Each example builds on concepts from the previous one.
 
 ### Running Examples
 
@@ -160,7 +152,7 @@ cd my_optimization
 
 ### Step 2: Create `run.py` with `get_bax_config(args)`
 
-**REQUIRED**: The file must be named `run.py` (not run_my_api.py or anything else!).
+**REQUIRED**: The file must be named `run.py`.
 
 ```python
 import numpy as np
