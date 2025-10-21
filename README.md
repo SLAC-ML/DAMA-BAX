@@ -62,7 +62,9 @@ You should see:
 
 ## Minimal Code Example
 
-Here's all you need to use BAX (from `examples/synthetic_simple/run_simple_api.py`):
+Here's all you need to use BAX (from `examples/synthetic_simple/run.py`):
+
+**IMPORTANT**: Your case directory must contain a file named `run.py` with `get_bax_config(args)` function.
 
 ```python
 from bax_core import run_bax_optimization
@@ -150,9 +152,9 @@ mkdir my_optimization
 cd my_optimization
 ```
 
-### Step 2: Implement `get_bax_config(args)`
+### Step 2: Create `run.py` with `get_bax_config(args)`
 
-Create `run_my_api.py`:
+**REQUIRED**: The file must be named `run.py` (not run_my_api.py or anything else!).
 
 ```python
 import numpy as np
@@ -198,7 +200,7 @@ def get_bax_config(args):
 python /path/to/DAMA-BAX/run.py --case ./my_optimization --max-iter 100
 ```
 
-**See** `examples/synthetic_simple/run_simple_api.py` for a complete minimal template.
+**See** `examples/synthetic_simple/run.py` for a complete minimal template.
 
 ---
 
@@ -265,7 +267,7 @@ opt.epochs = 150
 opt.run_acquisition(max_iterations=100)
 ```
 
-**See** `examples/synthetic/run_synthetic.py` for complete manual API example.
+**See** `examples/synthetic/run.py` for complete example with grid expansion.
 
 ---
 

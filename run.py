@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 """
-Unified BAX Runner - Directory-Based Entry Point
+Unified BAX Runner
 
-This script runs any BAX optimization case from a directory containing a run script.
+This script runs any BAX optimization case from a directory containing run.py.
 It works with built-in examples and user-created custom cases.
 
-Directory must contain a run script (run_*_api.py or run_*.py) with either:
-  - A run() function that accepts (args, extra_args), OR
-  - A main() function (will be called via sys.argv manipulation)
+REQUIREMENT: Each case directory must contain run.py with get_bax_config(args) function.
 
 Usage:
   python run.py --case <directory> [options]
@@ -20,7 +18,7 @@ Examples:
 
   # Run custom user case
   python run.py --case ~/my_bax_problem --run-id 0
-  python run.py --case ./cases/production_run_v2
+  python run.py --case ./my_case
 
   # Auto-detect from current directory
   cd examples/dama && python ../../run.py --run-id 3
@@ -41,7 +39,7 @@ def find_case_directory(case_arg=None):
     """
     Find case directory from:
     1. --case argument (if provided)
-    2. Current working directory (if it contains run_*.py)
+    2. Current working directory (if it contains run.py)
     3. Raise error if ambiguous or not found
 
     Parameters:
@@ -71,13 +69,11 @@ def find_case_directory(case_arg=None):
 
     # Try to auto-detect from CWD
     cwd = Path.cwd()
-    run_scripts = list(cwd.glob("run_*.py"))
-
-    if run_scripts:
-        # CWD contains run scripts, use it as case directory
+    if (cwd / "run.py").exists():
+        # CWD contains run.py, use it as case directory
         return cwd
 
-    # Check if CWD is project root (has examples/ but no run_*.py)
+    # Check if CWD is project root (has examples/ but no run.py)
     if (cwd / "examples").exists() and (cwd / "core").exists():
         raise ValueError(
             "No --case specified and current directory is project root.\n"
@@ -86,20 +82,16 @@ def find_case_directory(case_arg=None):
             "  2. Change to case directory: cd examples/dama && python ../../run.py"
         )
 
-    # No run scripts found and not in project root
+    # No run.py found and not in project root
     raise ValueError(
-        "No --case specified and no run_*.py found in current directory.\n"
+        "No --case specified and no run.py found in current directory.\n"
         "Please specify a case directory: python run.py --case <directory>"
     )
 
 
 def find_run_script(case_dir):
     """
-    Find run script in case directory.
-
-    Priority order:
-    1. run_*_api.py files (preferred)
-    2. run_*.py files (fallback)
+    Find run.py in case directory.
 
     Parameters:
     -----------
@@ -109,36 +101,27 @@ def find_run_script(case_dir):
     Returns:
     --------
     Path
-        Path to run script
+        Path to run.py
 
     Raises:
     -------
     FileNotFoundError
-        If no run script found in directory
+        If run.py not found in directory
     """
-    # Prefer API versions (simplified high-level API)
-    api_scripts = sorted(case_dir.glob("run_*_api.py"))
-    if api_scripts:
-        if len(api_scripts) > 1:
-            print(f"Info: Multiple API scripts found in {case_dir.name}, using: {api_scripts[0].name}")
-        return api_scripts[0]
+    run_script = case_dir / "run.py"
 
-    # Fall back to any run_*.py
-    run_scripts = sorted(case_dir.glob("run_*.py"))
-    if run_scripts:
-        if len(run_scripts) > 1:
-            print(f"Info: Multiple run scripts found in {case_dir.name}, using: {run_scripts[0].name}")
-        return run_scripts[0]
+    if not run_script.exists():
+        raise FileNotFoundError(
+            f"No run.py found in: {case_dir}\n\n"
+            "Each BAX case must contain a run.py file that implements get_bax_config(args).\n\n"
+            "To create a new case:\n"
+            "  1. Copy an example: cp -r examples/synthetic_simple my_case\n"
+            "  2. Edit your case: vim my_case/run.py\n"
+            "  3. Run it: python run.py --case my_case\n\n"
+            "See examples/synthetic_simple/run.py for a template."
+        )
 
-    # No run script found
-    raise FileNotFoundError(
-        f"No run script (run_*.py) found in: {case_dir}\n\n"
-        "Case directory must contain a run_*_api.py or run_*.py script.\n\n"
-        "To create a new case:\n"
-        "  1. Copy an example: cp -r examples/synthetic_simple cases/my_case\n"
-        "  2. Edit run script: vim cases/my_case/run_simple_api.py\n"
-        "  3. Run it: python run.py --case cases/my_case"
-    )
+    return run_script
 
 
 def load_run_module(script_path, case_dir):

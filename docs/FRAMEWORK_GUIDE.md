@@ -44,11 +44,23 @@ BAX is a framework for **multi-objective optimization when simulations are expen
 
 **Simplified API (Recommended):**
 - **3 functions**: oracles, objectives, algorithm
+- **1 file**: Must be named `run.py` with `get_bax_config(args)` function
 - Automatic initialization, normalization, and configuration
 
 **Manual API (Advanced):**
 - **5 functions**: oracles, objectives, algorithm, normalization, initialization
 - Full control over all aspects
+
+### File Convention
+
+**IMPORTANT**: Each BAX case must have a file named **`run.py`** (exactly, not run_my_case.py or anything else) that implements `get_bax_config(args)`.
+
+This convention allows the unified runner to find and execute your case:
+```bash
+python run.py --case ./my_case  # Looks for my_case/run.py
+```
+
+See `examples/synthetic_simple/run.py` for a template.
 
 ---
 
@@ -65,7 +77,7 @@ uv sync
 
 ### Minimal Example
 
-See `examples/synthetic/run_synthetic.py` for complete code. Here's the structure:
+See `examples/synthetic_simple/run.py` for complete code. Here's the structure:
 
 ```python
 import sys
@@ -94,13 +106,11 @@ def objective_obj2(x, fn_model):
     return calculate_other_objective(predictions)
 
 # Step 3: Define algorithm (acquisition strategy)
-def make_algo():
-    def algo(fn_model_list):
-        """Select next candidates to evaluate"""
-        # Use surrogates to find promising regions
-        candidates = your_optimization_method(fn_model_list)
-        return candidates_obj1, candidates_obj2
-    return algo
+def algo(fn_model_list):
+    """Select next candidates to evaluate"""
+    # Use surrogates to find promising regions
+    candidates = your_optimization_method(fn_model_list)
+    return candidates_obj1, candidates_obj2
 
 # Step 4: Generate initial data
 X_init = sample_initial_points(n_samples=1000, n_dims=4)
