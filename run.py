@@ -477,6 +477,7 @@ def main():
                 snapshot=args.snapshot if args.snapshot is not None else config.get('snapshot', True),
 
                 # From case config (problem-specific)
+                expansion_funcs=config.get('expansion_funcs'),
                 model_names=config.get('model_names'),
                 model_root=config.get('model_root', './models/'),
                 bounds=config.get('bounds'),
